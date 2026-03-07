@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getActiveSession } from "./use-bto-config";
+import { validateSeverity } from "../lib/defect-utils";
 import { useBTOStore } from "../lib/store";
 import type {
   AcousticToolPayload,
@@ -69,7 +70,7 @@ export function useGeminiTools() {
 
             case "log_defect": {
               const payload = fc.args as unknown as LogDefectToolPayload;
-              storeRef.current.addDefect({
+              const defect = validateSeverity({
                 id: nextId(),
                 room: payload.room,
                 defect_type: payload.defect_type,
@@ -77,10 +78,14 @@ export function useGeminiTools() {
                 description: payload.description,
                 recommendation: payload.recommendation,
                 confidence: payload.confidence,
+                severity_rationale: payload.severity_rationale,
+                review_required: payload.review_required,
+                bbox: payload.bbox,
                 timestamp: Date.now(),
               });
+              storeRef.current.addDefect(defect);
               storeRef.current.setInspectorMessage(
-                `${payload.defect_type} logged in ${payload.room}. Severity: ${payload.severity}.`,
+                `${defect.defect_type} logged in ${defect.room}. Severity: ${defect.severity}${defect.review_required ? " (verify on site)" : ""}.`,
               );
               functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
               break;

@@ -1,11 +1,126 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getGeminiClient } from "./use-bto-config";
 import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "../lib/fallback";
+import {
+  buildInvalidSeverityRationale,
+  clampBBox,
+  mergeVisionUpdate,
+  needsAgenticPass,
+  normalizeSeverity,
+  validateSeverity,
+  type VisionLikeResponse,
+} from "../lib/defect-utils";
 import { sendVisionToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
 import type { Defect, Measurement, Severity, UseCameraReturn } from "../lib/types";
 
 const VISION_MODEL = "gemini-3-flash-preview";
+
+const CONQUAS_SEVERITY_PROMPT = `SEVERITY CLASSIFICATION (BCA CONQUAS):
+- Critical: Water seepage/leakage, broken glass, structural cracks >0.3mm or >300mm,
+  non-functional doors/windows/locks, waterproofing failure, electrical hazard, FCU leak.
+- Moderate: Hollow tiles, hairline cracks >50mm, paint spalling >50mm, misaligned frames >3mm,
+  chipped tile edges, loose fittings.
+- Minor: Cosmetic scratches, small paint blemishes <50mm, tonality differences, minor alignment,
+  removable stains, scuff marks.`;
+
+interface VisionResponse extends VisionLikeResponse {
+  defect_type: string;
+  severity: Severity;
+  severity_rationale: string;
+  description: string;
+  recommendation: string;
+  confidence: number;
+  bbox?: [number, number, number, number] | null;
+  measurement?: Measurement;
+}
+
+/** Second-pass agentic verification with code execution for ambiguous defects. */
+async function triggerAgenticPass(
+  base64Data: string,
+  mimeType: string,
+  fastResult: VisionResponse,
+  room: string,
+  measureMode = false,
+): Promise<Partial<VisionResponse> | null> {
+  const client = getGeminiClient();
+  if (!client) return null;
+
+  const bboxContext = fastResult.bbox
+    ? `\nThe fast pass identified a bounding box at [${fastResult.bbox.join(", ")}] (normalized 0-1000).`
+    : "";
+
+  const prompt = `You are verifying a defect classification from a fast pass. The initial result was:
+- Type: ${fastResult.defect_type}
+- Severity: ${fastResult.severity} (rationale: ${fastResult.severity_rationale})
+- Confidence: ${fastResult.confidence}
+- Room: ${room}${bboxContext}
+
+${CONQUAS_SEVERITY_PROMPT}
+
+${measureMode
+    ? `MEASUREMENT MODE:
+- A Singapore 50-cent coin (24.66mm diameter) should be visible as the scale reference.
+- Use code execution to inspect the image, zoom into the defect, and estimate width/length using the coin when possible.`
+    : "Use code execution to analyze the image if helpful (e.g. measure crack width relative to reference objects, check color distribution for water stains)."}
+Then provide your final verified assessment.
+
+Return ONLY valid JSON:
+{
+  "defect_type": "...",
+  "severity": "Minor" | "Moderate" | "Critical",
+  "severity_rationale": "one-line reason after verification",
+  "description": "...",
+  "recommendation": "...",
+  "confidence": 0.0-1.0,
+  "bbox": [ymin, xmin, ymax, xmax] or null${measureMode ? `,
+  "measurement": {
+    "width_mm": <estimated width in mm>,
+    "length_mm": <estimated length in mm>,
+    "depth_mm": "<estimated depth description>",
+    "reference_object": "SG 50-cent coin (24.66mm)",
+    "notes": "<measurement notes>"
+  }` : ""}
+}`;
+
+  try {
+    const response = await client.models.generateContent({
+      model: VISION_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        tools: [{ codeExecution: {} }],
+        thinkingConfig: { thinkingBudget: 512 },
+        responseMimeType: "text/plain",
+      },
+    });
+
+    // Code execution responses have multiple parts (executableCode, codeExecutionResult, text).
+    // Extract the last text part which contains the final JSON answer.
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (!parts?.length) return null;
+
+    let lastText = "";
+    for (const part of parts) {
+      if (part.text) lastText = part.text;
+    }
+    if (!lastText) return null;
+
+    // Extract JSON from potential markdown fences
+    const jsonMatch = lastText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, lastText];
+    const cleaned = (jsonMatch[1] ?? lastText).trim();
+    return JSON.parse(cleaned) as Partial<VisionResponse>;
+  } catch {
+    return null;
+  }
+}
 
 function nextId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -32,6 +147,7 @@ export function useCamera(): UseCameraReturn {
   const currentRoom = useBTOStore((state) => state.currentRoom);
   const setCameraPreview = useBTOStore((state) => state.setCameraPreview);
   const addDefect = useBTOStore((state) => state.addDefect);
+  const updateDefect = useBTOStore((state) => state.updateDefect);
   const failureModes = useBTOStore((state) => state.failureModes);
   const setInspectorMessage = useBTOStore((state) => state.setInspectorMessage);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -137,6 +253,10 @@ export function useCamera(): UseCameraReturn {
 
   async function sendToVision(frameUrl: string, prompt = "", measureMode = false) {
     const fallback = FALLBACKS.vision(currentRoom, frameUrl);
+    const base64Match = frameUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const agenticContext = base64Match
+      ? { mimeType: base64Match[1], base64Data: base64Match[2] }
+      : null;
 
     const result = await withRetryAndFallback(
       async () => {
@@ -145,16 +265,14 @@ export function useCamera(): UseCameraReturn {
 
         const client = getGeminiClient();
         if (!client) {
+          throw new Error("No Gemini API key configured.");
+        }
+
+        if (!agenticContext) {
           return inferDefectLocal(prompt, currentRoom, frameUrl, measureMode);
         }
 
-        const base64Match = frameUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!base64Match) {
-          return inferDefectLocal(prompt, currentRoom, frameUrl, measureMode);
-        }
-
-        const mimeType = base64Match[1];
-        const base64Data = base64Match[2];
+        const { mimeType, base64Data } = agenticContext;
 
         const measurementInstructions = measureMode
           ? `\n\nMEASUREMENT MODE: A Singapore 50-cent coin (24.66mm diameter) should be visible as a size reference.
@@ -174,13 +292,17 @@ Include a "measurement" field in your response:
         const visionPrompt = `You are Ah Seng, a veteran Singapore BTO flat inspector. Analyze this photo from the ${currentRoom} for construction defects.
 ${prompt ? `User note: ${prompt}` : ""}
 
+${CONQUAS_SEVERITY_PROMPT}
+
 Return a JSON object with:
 {
   "defect_type": "type of defect found (e.g. Wall crack, Hollow tile, Water stain, Paint defect, Chipped edge)",
-  "severity": "Minor" or "Moderate" or "Critical",
+  "severity": "Minor" | "Moderate" | "Critical",
+  "severity_rationale": "one-line reason referencing the criteria above",
   "description": "brief description of what you see",
   "recommendation": "what the homeowner should do",
-  "confidence": <number 0.0 to 1.0>${measureMode ? ',\n  "measurement": { ... }' : ""}
+  "confidence": <number 0.0 to 1.0>,
+  "bbox": [ymin, xmin, ymax, xmax] // normalized 0-1000, or null${measureMode ? ',\n  "measurement": { ... }' : ""}
 }${measurementInstructions}
 
 If no defect is visible, still return your best assessment. Return ONLY valid JSON.`;
@@ -204,32 +326,31 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
         const text = response.text?.trim();
         if (!text) throw new Error("Empty response from Gemini Vision");
 
-        const parsed = JSON.parse(text) as {
-          defect_type: string;
-          severity: Severity;
-          description: string;
-          recommendation: string;
-          confidence: number;
-          measurement?: Measurement;
-        };
+        const parsed = JSON.parse(text) as VisionResponse;
+        const parsedSeverity = normalizeSeverity(parsed.severity);
 
-        const defect: Defect = {
+        let defect: Defect = {
           id: nextId(),
           room: currentRoom,
           defect_type: parsed.defect_type || "Unclassified defect",
-          severity: parsed.severity || "Moderate",
+          severity: parsedSeverity ?? "Moderate",
           description: parsed.description || "Defect detected by AI vision.",
           recommendation: parsed.recommendation || "Log and follow up during defect liability period.",
-          confidence: parsed.confidence || 0.7,
+          confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.7,
           photo_url: frameUrl,
           timestamp: Date.now(),
+          severity_rationale: parsedSeverity
+            ? parsed.severity_rationale || undefined
+            : buildInvalidSeverityRationale("Fast pass", parsed.severity_rationale),
+          review_required: parsedSeverity ? undefined : true,
+          bbox: clampBBox(parsed.bbox),
         };
 
         if (parsed.measurement) {
           defect.measurement = parsed.measurement;
         }
 
-        return defect;
+        return validateSeverity(defect);
       },
       fallback,
       15000,
@@ -241,9 +362,12 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
     const measureInfo = result.data.measurement
       ? ` (~${result.data.measurement.width_mm ?? "?"}mm x ${result.data.measurement.length_mm ?? "?"}mm)`
       : "";
+    const fallbackMessage = result.error?.toLowerCase().includes("api key")
+      ? "No Gemini API key configured, so I logged an offline fallback defect for manual verification."
+      : "Vision service dropped, but I logged a fallback defect for follow-up.";
     setInspectorMessage(
       result.error
-        ? "Vision service dropped, but I logged a fallback defect for follow-up."
+        ? fallbackMessage
         : `${result.data.defect_type}${measureInfo} logged in ${currentRoom}.`,
     );
 
@@ -251,6 +375,53 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
       currentRoom,
       `${result.data.defect_type} (${result.data.severity}): ${result.data.description}${measureInfo}`,
     );
+
+    if (!result.isFallback && agenticContext && needsAgenticPass(result.data, measureMode)) {
+      void (async () => {
+        try {
+          const baseResult: VisionResponse = {
+            defect_type: result.data.defect_type,
+            severity: result.data.severity,
+            severity_rationale: result.data.severity_rationale ?? "",
+            description: result.data.description,
+            recommendation: result.data.recommendation,
+            confidence: result.data.confidence,
+            bbox: result.data.bbox,
+            measurement: result.data.measurement,
+          };
+
+          const agenticResult = await Promise.race([
+            triggerAgenticPass(agenticContext.base64Data, agenticContext.mimeType, baseResult, currentRoom, measureMode),
+            new Promise<null>((resolve) => {
+              window.setTimeout(() => resolve(null), 10000);
+            }),
+          ]);
+
+          if (!agenticResult) {
+            updateDefect(result.data.id, validateSeverity({
+              ...result.data,
+              review_required: true,
+              severity_rationale: result.data.severity_rationale ?? "Agentic verification timed out. Verify on site.",
+            }));
+            setInspectorMessage(`${result.data.defect_type} logged. Verification timed out, verify on site.`);
+            return;
+          }
+
+          const refined = mergeVisionUpdate({ ...result.data, agentic_pass: true }, agenticResult);
+          const measurementPatch = agenticResult.measurement ? { measurement: agenticResult.measurement } : {};
+          updateDefect(result.data.id, { ...refined, ...measurementPatch, agentic_pass: true });
+          setInspectorMessage(`${refined.defect_type} verified with second-pass analysis in ${currentRoom}.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Agentic verification failed";
+          updateDefect(result.data.id, validateSeverity({
+            ...result.data,
+            review_required: true,
+            severity_rationale: result.data.severity_rationale ?? "Agentic verification failed. Verify on site.",
+          }));
+          setInspectorMessage(`${result.data.defect_type} logged. ${message}. Verify on site.`);
+        }
+      })();
+    }
   }
 
   async function loadFromFile(file: File) {
@@ -275,18 +446,33 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
 
 function inferDefectLocal(prompt: string, room: string, frameUrl: string, measureMode = false): Defect {
   const lowered = prompt.toLowerCase();
-  const defectType = lowered.includes("water")
-    ? "Water stain"
-    : lowered.includes("tile")
-      ? "Loose tile edge"
-      : "Wall crack";
-  const severity: Severity = lowered.includes("critical")
-    ? "Critical"
-    : lowered.includes("minor")
-      ? "Minor"
-      : "Moderate";
 
-  const defect: Defect = {
+  // Type-based mapping
+  let defectType: string;
+  let severity: Severity;
+  let reviewRequired = false;
+  let rationale: string;
+
+  if (/water|seepage|leak/i.test(lowered)) {
+    defectType = "Water stain";
+    severity = "Critical";
+    rationale = "Water/seepage keywords detected -- Critical per CONQUAS.";
+  } else if (/hollow|loose\s*tile/i.test(lowered)) {
+    defectType = "Hollow tile";
+    severity = "Minor";
+    rationale = "Hollow tile without secondary signals capped at Minor.";
+  } else if (/crack/i.test(lowered)) {
+    defectType = "Wall crack";
+    severity = "Moderate";
+    rationale = "Crack detected -- Moderate pending measurement.";
+  } else {
+    defectType = lowered.includes("tile") ? "Tile defect" : "Surface defect";
+    severity = "Moderate";
+    reviewRequired = true;
+    rationale = "Local inference -- no AI vision. Verify on site.";
+  }
+
+  let defect: Defect = {
     id: nextId(),
     room,
     defect_type: defectType,
@@ -299,9 +485,11 @@ function inferDefectLocal(prompt: string, room: string, frameUrl: string, measur
       severity === "Critical"
         ? "Escalate to contractor immediately and keep dated photos."
         : "Log it under the defect liability period and request rectification.",
-    confidence: severity === "Critical" ? 0.9 : 0.78,
+    confidence: severity === "Critical" ? 0.9 : 0.6,
     photo_url: frameUrl,
     timestamp: Date.now(),
+    severity_rationale: rationale,
+    review_required: reviewRequired || undefined,
   };
 
   if (measureMode) {
@@ -314,5 +502,6 @@ function inferDefectLocal(prompt: string, room: string, frameUrl: string, measur
     };
   }
 
+  defect = validateSeverity(defect);
   return defect;
 }

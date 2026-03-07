@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "./fallback";
+import { clampBBox } from "./defect-utils";
 import { deriveBlueprintCoords, generateInspectionReport } from "./gemini-report";
 import type {
   AsyncState,
@@ -63,6 +64,14 @@ function buildReportState(data: InspectionReport | null): AsyncState<InspectionR
   };
 }
 
+function buildBlueprintState(defects: BTOStore["defects"], flatType: FlatType): AsyncState<BlueprintCoord[]> {
+  return {
+    data: deriveBlueprintCoords(defects, flatType),
+    loading: false,
+    error: null,
+  };
+}
+
 export const useBTOStore = create<BTOStore>()(
   persist(
     (set, get) => ({
@@ -79,13 +88,20 @@ export const useBTOStore = create<BTOStore>()(
       defects: [],
       addDefect: (defect) =>
         set((state) => ({
-          defects: [...state.defects, defect],
-          blueprintCoords: {
-            data: deriveBlueprintCoords([...state.defects, defect], state.flatType),
-            loading: false,
-            error: null,
-          },
+          defects: [...state.defects, { ...defect, bbox: clampBBox(defect.bbox) }],
+          blueprintCoords: buildBlueprintState([...state.defects, { ...defect, bbox: clampBBox(defect.bbox) }], state.flatType),
         })),
+      updateDefect: (id, patch) =>
+        set((state) => {
+          const defects = state.defects.map((defect) => defect.id === id
+            ? { ...defect, ...patch, bbox: clampBBox(patch.bbox ?? defect.bbox) }
+            : defect);
+
+          return {
+            defects,
+            blueprintCoords: buildBlueprintState(defects, state.flatType),
+          };
+        }),
       cameraPreview: null,
       setCameraPreview: (url) => set({ cameraPreview: url }),
       report: emptyAsyncState<InspectionReport>(),
@@ -171,11 +187,7 @@ export const useBTOStore = create<BTOStore>()(
           ...current,
           ...(persistedState ?? {}),
           report: buildReportState(persistedState?.reportData ?? null),
-          blueprintCoords: {
-            data: deriveBlueprintCoords(persistedState?.defects ?? [], persistedState?.flatType ?? "4-room"),
-            loading: false,
-            error: null,
-          },
+          blueprintCoords: buildBlueprintState(persistedState?.defects ?? [], persistedState?.flatType ?? "4-room"),
         };
       },
     },

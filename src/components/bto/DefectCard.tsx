@@ -42,11 +42,24 @@ export function DefectCard({ defect }: DefectCardProps) {
                 </div>
                 <div className="defect-severity-row">
                     <span className="defect-severity-label">Severity</span>
-                    <span className="defect-severity-value" style={{ color }}>{defect.severity}</span>
+                    <div className="defect-severity-meta">
+                        {defect.review_required && (
+                            <span className="defect-review-flag" title="Manual verification required">
+                                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>warning</span>
+                                Verify on site
+                            </span>
+                        )}
+                        <span className="defect-severity-value" style={{ color }}>{defect.severity}</span>
+                    </div>
                 </div>
                 <div className="defect-bar">
                     <div className="defect-bar-fill" style={{ width: barWidth, background: color }} />
                 </div>
+                {defect.severity_rationale && (
+                    <div className="defect-rationale" title={defect.severity_rationale}>
+                        {defect.severity_rationale}
+                    </div>
+                )}
                 {defect.measurement && (
                     <div className="defect-measurement">
                         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>straighten</span>

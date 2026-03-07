@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useCamera } from "../../hooks/use-camera";
+import { clampBBox } from "../../lib/defect-utils";
 import { useBTOStore } from "../../lib/store";
 import "./CameraCapture.css";
 
@@ -11,9 +12,14 @@ export function CameraCapture() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraPreview = useBTOStore((s) => s.cameraPreview);
   const setCameraPreview = useBTOStore((s) => s.setCameraPreview);
+  const defects = useBTOStore((s) => s.defects);
   const { captureFrame, sendToVision, loadFromFile, videoRef, streamActive, cameraError, startStream } = useCamera();
 
   const captured = !!cameraPreview;
+  const lastDefect = defects.length > 0 ? defects[defects.length - 1] : null;
+  const clampedBBox = clampBBox(lastDefect?.bbox);
+  // Only show overlays when the preview matches the last defect's photo
+  const showDefectOverlay = captured && lastDefect?.photo_url === cameraPreview;
 
   async function handleCapture() {
     setWorking(true);
@@ -47,7 +53,6 @@ export function CameraCapture() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFileSelect}
         style={{ display: "none" }}
       />
@@ -66,6 +71,35 @@ export function CameraCapture() {
         {/* Captured snapshot overlay */}
         {cameraPreview && (
           <img src={cameraPreview} alt="Inspection preview" className="viewfinder-image" data-testid="camera-preview" />
+        )}
+
+        {/* Bounding box overlay */}
+        {showDefectOverlay && clampedBBox && (
+          <div
+            className={`bbox-overlay bbox-overlay--${lastDefect.severity.toLowerCase()}`}
+            style={{
+              top: `${clampedBBox[0] / 10}%`,
+              left: `${clampedBBox[1] / 10}%`,
+              height: `${(clampedBBox[2] - clampedBBox[0]) / 10}%`,
+              width: `${(clampedBBox[3] - clampedBBox[1]) / 10}%`,
+            }}
+          />
+        )}
+
+        {/* Review required badge */}
+        {showDefectOverlay && lastDefect?.review_required && (
+          <div className="review-badge font-mono">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>warning</span>
+            VERIFY ON SITE
+          </div>
+        )}
+
+        {/* Agentic pass indicator */}
+        {showDefectOverlay && lastDefect?.agentic_pass && (
+          <div className="agentic-badge font-mono">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>verified</span>
+            AI VERIFIED
+          </div>
         )}
 
         {/* Capture flash */}
@@ -147,8 +181,8 @@ export function CameraCapture() {
                   {streamActive ? "photo_camera" : "upload"}
                 </span>
               </button>
-              <button className="vf-btn" disabled>
-                <span className="material-symbols-outlined">sync</span>
+              <button className="vf-btn" onClick={() => fileInputRef.current?.click()} title="Upload from gallery">
+                <span className="material-symbols-outlined">upload</span>
               </button>
             </>
           )}
@@ -160,6 +194,14 @@ export function CameraCapture() {
         <div className="measure-hint">
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>straighten</span>
           <span className="font-mono">MEASURE MODE: Place a SG 50-cent coin next to the defect as size reference</span>
+        </div>
+      )}
+
+      {/* Severity rationale caption */}
+      {showDefectOverlay && lastDefect?.severity_rationale && (
+        <div className={`severity-rationale severity-rationale--${lastDefect.severity.toLowerCase()}`}>
+          <span className="font-mono">{lastDefect.severity}</span>
+          <span>{lastDefect.severity_rationale}</span>
         </div>
       )}
 

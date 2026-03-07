@@ -56,14 +56,34 @@
 .defect-severity-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-top: 8px;
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
 }
 
+.defect-severity-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .defect-severity-label {
     color: var(--text-muted);
+}
+
+.defect-review-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.25);
+    color: var(--hazard);
+    font-size: 9px;
+    letter-spacing: 0.03em;
 }
 
 .defect-bar {
@@ -79,6 +99,17 @@
     height: 100%;
     transition: width 0.4s ease;
     border-radius: var(--radius-full);
+}
+
+.defect-rationale {
+    margin-top: 6px;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--text-dim);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
 }
 
 .defect-measurement {

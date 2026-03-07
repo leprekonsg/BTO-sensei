@@ -28,6 +28,10 @@ export interface Defect {
   photo_url?: string;
   timestamp: number;
   measurement?: Measurement;
+  severity_rationale?: string;
+  review_required?: boolean;
+  bbox?: [number, number, number, number];
+  agentic_pass?: boolean;
 }
 
 export interface RoomScore {
@@ -81,6 +85,7 @@ export interface BTOStore {
   setFrequencyData: (data: Float32Array | null) => void;
   defects: Defect[];
   addDefect: (defect: Defect) => void;
+  updateDefect: (id: string, patch: Partial<Defect>) => void;
   cameraPreview: string | null;
   setCameraPreview: (url: string | null) => void;
   report: AsyncState<InspectionReport>;
@@ -135,6 +140,9 @@ export interface LogDefectToolPayload {
   description: string;
   recommendation: string;
   confidence: number;
+  severity_rationale?: string;
+  review_required?: boolean;
+  bbox?: [number, number, number, number];
 }
 
 export interface GenerateReportToolPayload {

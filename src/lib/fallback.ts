@@ -209,17 +209,20 @@ export const FALLBACKS = {
     return {
       id: `fallback-${room.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
       room,
-      defect_type: "Possible finishing defect",
+      defect_type: "Unclassified defect (offline)",
       severity: "Moderate",
       description:
         "Vision fallback logged this item because the live inspection step failed.",
       recommendation: "Retake the photo with stronger lighting and keep a manual note.",
-      confidence: 0.62,
+      confidence: 0.3,
       photo_url: photoUrl,
       timestamp: Date.now(),
+      review_required: true,
+      severity_rationale: "Fallback -- no AI analysis available. Verify on site.",
     };
   },
   report(flatId: string, defects: Defect[]): InspectionReport {
+    const verifyOnSiteCount = defects.filter((defect) => defect.review_required).length;
     return {
       flat_id: flatId,
       inspection_date: new Date().toISOString().slice(0, 10),
@@ -227,7 +230,9 @@ export const FALLBACKS = {
       room_scores: [],
       priority_defects: defects.slice(0, 3),
       inspector_note:
-        "Fallback report generated. Review the logged evidence manually before submission.",
+        verifyOnSiteCount > 0
+          ? `Fallback report generated. Verify ${verifyOnSiteCount} item${verifyOnSiteCount === 1 ? "" : "s"} on site before submission.`
+          : "Fallback report generated. Review the logged evidence manually before submission.",
     };
   },
 };

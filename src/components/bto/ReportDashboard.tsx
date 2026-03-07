@@ -99,6 +99,7 @@ export function ReportDashboard() {
   const score = data.overall_health_score;
   const circumference = 2 * Math.PI * 70;
   const offset = circumference * (1 - score / 100);
+  const verifyOnSiteDefects = defects.filter((defect) => defect.review_required);
 
   return (
     <div className="report-section" data-testid="report-dashboard">
@@ -242,6 +243,31 @@ export function ReportDashboard() {
         </div>
         <p className="report-verdict-text">{data.inspector_note || inspectorMessage}</p>
       </div>
+
+      {verifyOnSiteDefects.length > 0 && (
+        <div className="report-review-section">
+          <div className="report-review-header">
+            <div className="report-review-title">
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>warning</span>
+              <h4 className="font-mono">Verify On Site</h4>
+            </div>
+            <span className="report-review-badge font-mono">
+              {verifyOnSiteDefects.length} flagged
+            </span>
+          </div>
+          <div className="report-review-list">
+            {verifyOnSiteDefects.slice(0, 5).map((defect) => (
+              <article key={defect.id} className="report-review-item">
+                <div className="report-review-meta">
+                  <span className="font-mono">{defect.room}</span>
+                  <span>{defect.defect_type}</span>
+                </div>
+                <p>{defect.severity_rationale || defect.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
 
       {report.error && (
         <div className="error-banner" data-testid="report-error">

@@ -45,7 +45,7 @@ export const logDefectDeclaration: FunctionDeclaration = {
       severity: {
         type: Type.STRING,
         enum: ["Minor", "Moderate", "Critical"],
-        description: "Severity assessment.",
+        description: "Severity per BCA CONQUAS: Critical = water seepage/leakage, structural cracks >0.3mm, broken glass, non-functional doors/windows/locks, waterproofing failure, electrical hazard, FCU leak. Moderate = hollow tiles, hairline cracks >50mm, paint spalling >50mm, misaligned frames >3mm, chipped tile edges, loose fittings. Minor = cosmetic scratches, small paint blemishes <50mm, tonality differences, minor alignment, removable stains, scuff marks.",
       },
       description: {
         type: Type.STRING,
@@ -58,6 +58,21 @@ export const logDefectDeclaration: FunctionDeclaration = {
       confidence: {
         type: Type.NUMBER,
         description: "Confidence score between 0 and 1.",
+      },
+      severity_rationale: {
+        type: Type.STRING,
+        description: "One-line reason for the chosen severity.",
+      },
+      review_required: {
+        type: Type.BOOLEAN,
+        description: "True when the defect should be manually verified on site.",
+      },
+      bbox: {
+        type: Type.ARRAY,
+        description: "Optional normalized bounding box [ymin, xmin, ymax, xmax] in the 0-1000 range.",
+        items: {
+          type: Type.NUMBER,
+        },
       },
     },
     required: ["room", "defect_type", "severity", "description", "recommendation", "confidence"],
