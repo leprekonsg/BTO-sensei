@@ -7,13 +7,25 @@ export function CameraCapture() {
   const [prompt, setPrompt] = useState("Hairline crack near the window frame");
   const [working, setWorking] = useState(false);
   const [measureMode, setMeasureMode] = useState(false);
+  const [flashActive, setFlashActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraPreview = useBTOStore((s) => s.cameraPreview);
+  const setCameraPreview = useBTOStore((s) => s.setCameraPreview);
   const { captureFrame, sendToVision, loadFromFile, videoRef, streamActive, cameraError, startStream } = useCamera();
+
+  const captured = !!cameraPreview;
 
   async function handleCapture() {
     setWorking(true);
-    try { await captureFrame(); } finally { setWorking(false); }
+    try {
+      setFlashActive(true);
+      await captureFrame();
+      setTimeout(() => setFlashActive(false), 300);
+    } finally { setWorking(false); }
+  }
+
+  function handleRetake() {
+    setCameraPreview(null);
   }
 
   async function handleAnalyze() {
@@ -26,13 +38,11 @@ export function CameraCapture() {
     if (!file) return;
     setWorking(true);
     try { await loadFromFile(file); } finally { setWorking(false); }
-    // Reset so the same file can be re-selected
     e.target.value = "";
   }
 
   return (
     <div className="camera-section">
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -43,8 +53,8 @@ export function CameraCapture() {
       />
 
       {/* Viewfinder */}
-      <div className="viewfinder industrial-border">
-        {/* Live video feed -- always rendered so browser can connect the stream */}
+      <div className={`viewfinder industrial-border${captured ? " viewfinder--captured" : ""}`}>
+        {/* Live video feed */}
         <video
           ref={videoRef}
           autoPlay
@@ -53,10 +63,13 @@ export function CameraCapture() {
           className="viewfinder-video"
         />
 
-        {/* Captured snapshot overlay (covers video) */}
+        {/* Captured snapshot overlay */}
         {cameraPreview && (
           <img src={cameraPreview} alt="Inspection preview" className="viewfinder-image" data-testid="camera-preview" />
         )}
+
+        {/* Capture flash */}
+        {flashActive && <div className="capture-flash" />}
 
         {/* Placeholder when no camera and no snapshot */}
         {!streamActive && !cameraPreview && (
@@ -81,8 +94,8 @@ export function CameraCapture() {
           </div>
         )}
 
-        {/* Measurement mode overlay */}
-        {measureMode && !cameraPreview && (
+        {/* Measurement mode overlay (live viewfinder only) */}
+        {measureMode && !captured && (
           <div className="measure-overlay">
             <div className="measure-coin-guide">
               <div className="measure-coin-circle" />
@@ -91,39 +104,54 @@ export function CameraCapture() {
           </div>
         )}
 
-        {/* Corner markers */}
-        <div className="corner corner--tl" />
-        <div className="corner corner--tr" />
-        <div className="corner corner--bl" />
-        <div className="corner corner--br" />
+        {/* HUD elements -- hidden after capture so user sees a clean preview */}
+        {!captured && (
+          <>
+            <div className="corner corner--tl" />
+            <div className="corner corner--tr" />
+            <div className="corner corner--bl" />
+            <div className="corner corner--br" />
+            <div className="crosshair-h" />
+            <div className="crosshair-v" />
+            <div className="hud-scanline" />
+          </>
+        )}
 
-        {/* Crosshairs */}
-        <div className="crosshair-h" />
-        <div className="crosshair-v" />
-        <div className="hud-scanline" />
-
-        {/* Capture controls */}
+        {/* Controls */}
         <div className="viewfinder-controls">
-          <button
-            className={`vf-btn ${measureMode ? "vf-btn--active" : ""}`}
-            onClick={() => setMeasureMode(!measureMode)}
-            title="Toggle measurement mode"
-          >
-            <span className="material-symbols-outlined">straighten</span>
-          </button>
-          <button
-            className="vf-capture-btn"
-            onClick={streamActive ? handleCapture : () => fileInputRef.current?.click()}
-            disabled={working}
-            data-testid="capture-frame"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
-              {streamActive ? "photo_camera" : "upload"}
-            </span>
-          </button>
-          <button className="vf-btn" disabled>
-            <span className="material-symbols-outlined">sync</span>
-          </button>
+          {captured ? (
+            <>
+              <button className="vf-btn" onClick={handleRetake} title="Retake photo">
+                <span className="material-symbols-outlined">replay</span>
+              </button>
+              <button className="vf-btn" onClick={() => fileInputRef.current?.click()} title="Upload different photo">
+                <span className="material-symbols-outlined">upload</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={`vf-btn ${measureMode ? "vf-btn--active" : ""}`}
+                onClick={() => setMeasureMode(!measureMode)}
+                title="Toggle measurement mode"
+              >
+                <span className="material-symbols-outlined">straighten</span>
+              </button>
+              <button
+                className="vf-capture-btn"
+                onClick={streamActive ? handleCapture : () => fileInputRef.current?.click()}
+                disabled={working}
+                data-testid="capture-frame"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
+                  {streamActive ? "photo_camera" : "upload"}
+                </span>
+              </button>
+              <button className="vf-btn" disabled>
+                <span className="material-symbols-outlined">sync</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 

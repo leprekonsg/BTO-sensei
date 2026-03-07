@@ -59,12 +59,6 @@ export function Layout({ children }: LayoutProps) {
           active={activeTab === "scan"}
           onClick={() => setActiveTab("scan")}
         />
-        <NavItem
-          icon="analytics"
-          label="Stats"
-          active={false}
-          onClick={() => { }}
-        />
 
         {/* Center mic button */}
         <div className="nav-center-wrap">

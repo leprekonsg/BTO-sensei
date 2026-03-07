@@ -87,19 +87,20 @@
     padding-bottom: 96px;
 }
 
-/* Nav */
+/* Nav -- 4 slots: Scan | Mic | Logger | Report */
 .layout-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 30;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr 1fr;
     align-items: center;
-    justify-content: space-around;
+    justify-items: center;
     background: var(--deep-charcoal);
     border-top: 4px solid var(--safety-orange);
-    padding: 8px 8px calc(env(safe-area-inset-bottom, 16px) + 8px);
+    padding: 8px 0 calc(env(safe-area-inset-bottom, 16px) + 8px);
 }
 
 .nav-item {
