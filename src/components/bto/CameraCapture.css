@@ -14,14 +14,27 @@
     overflow: hidden;
 }
 
+.viewfinder-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .viewfinder-image {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     opacity: 0.6;
+    z-index: 1;
 }
 
 .viewfinder-placeholder {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     display: flex;
@@ -31,6 +44,42 @@
     gap: 8px;
     color: var(--text-dim);
     font-size: 12px;
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.viewfinder-error {
+    max-width: 260px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--severity-moderate);
+    line-height: 1.4;
+}
+
+.viewfinder-fallback-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.vf-fallback-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius);
+    color: white;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.vf-fallback-btn:active {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* Corners */
@@ -41,6 +90,7 @@
     border-color: var(--hazard);
     border-style: solid;
     border-width: 0;
+    z-index: 2;
 }
 
 .corner--tl {
@@ -78,6 +128,7 @@
     left: 0;
     width: 100%;
     border-top: 1px solid rgba(250, 204, 21, 0.25);
+    z-index: 2;
 }
 
 .crosshair-v {
@@ -86,6 +137,7 @@
     left: 50%;
     height: 100%;
     border-left: 1px solid rgba(250, 204, 21, 0.25);
+    z-index: 2;
 }
 
 /* Controls */
@@ -97,6 +149,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
+    z-index: 3;
 }
 
 .vf-btn {
@@ -112,6 +165,11 @@
 .vf-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.vf-btn--active {
+    background: var(--primary);
+    border-color: var(--primary);
 }
 
 .vf-capture-btn {
@@ -191,4 +249,52 @@
 
 .analyze-btn:active:not(:disabled) {
     transform: scale(0.97);
+}
+
+/* Measurement overlay */
+.measure-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.measure-coin-guide {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.measure-coin-circle {
+    width: 60px;
+    height: 60px;
+    border: 2px dashed var(--hazard);
+    border-radius: var(--radius-full);
+    animation: pulse-ring 2s ease-in-out infinite;
+}
+
+.measure-coin-label {
+    font-size: 10px;
+    color: var(--hazard);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 4px 8px;
+    border-radius: 2px;
+}
+
+.measure-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(250, 204, 21, 0.1);
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    border-radius: var(--radius);
+    font-size: 11px;
+    color: var(--hazard);
 }

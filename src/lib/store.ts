@@ -7,6 +7,7 @@ import type {
   BlueprintCoord,
   BTOStore,
   FailureMode,
+  FlatType,
   InspectionReport,
   TapResult,
 } from "./types";
@@ -50,7 +51,7 @@ function emptyAsyncState<T>(): AsyncState<T> {
   };
 }
 
-type PersistedState = Pick<BTOStore, "currentRoom" | "audioMode" | "defects"> & {
+type PersistedState = Pick<BTOStore, "currentRoom" | "audioMode" | "defects" | "flatType"> & {
   reportData: InspectionReport | null;
 };
 
@@ -67,6 +68,8 @@ export const useBTOStore = create<BTOStore>()(
     (set, get) => ({
       currentRoom: "Living Room",
       setCurrentRoom: (room) => set({ currentRoom: room }),
+      flatType: "4-room" as FlatType,
+      setFlatType: (type) => set({ flatType: type }),
       audioMode: "prerecorded",
       setAudioMode: (mode) => set({ audioMode: mode }),
       lastTapResult: emptyAsyncState<TapResult>(),
@@ -78,7 +81,7 @@ export const useBTOStore = create<BTOStore>()(
         set((state) => ({
           defects: [...state.defects, defect],
           blueprintCoords: {
-            data: deriveBlueprintCoords([...state.defects, defect]),
+            data: deriveBlueprintCoords([...state.defects, defect], state.flatType),
             loading: false,
             error: null,
           },
@@ -157,6 +160,7 @@ export const useBTOStore = create<BTOStore>()(
       storage: createJSONStorage(() => getStorage()),
       partialize: (state): PersistedState => ({
         currentRoom: state.currentRoom,
+        flatType: state.flatType,
         audioMode: state.audioMode,
         defects: state.defects,
         reportData: state.report.data,
@@ -168,7 +172,7 @@ export const useBTOStore = create<BTOStore>()(
           ...(persistedState ?? {}),
           report: buildReportState(persistedState?.reportData ?? null),
           blueprintCoords: {
-            data: deriveBlueprintCoords(persistedState?.defects ?? []),
+            data: deriveBlueprintCoords(persistedState?.defects ?? [], persistedState?.flatType ?? "4-room"),
             loading: false,
             error: null,
           },

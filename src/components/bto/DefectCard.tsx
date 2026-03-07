@@ -38,7 +38,7 @@ export function DefectCard({ defect }: DefectCardProps) {
             <div className="defect-info">
                 <div className="defect-header">
                     <span className="defect-type">{defect.defect_type}</span>
-                    <span className="defect-id font-mono">#{defect.id.slice(0, 6).toUpperCase()}</span>
+                    <span className="defect-id font-mono">{defect.room}</span>
                 </div>
                 <div className="defect-severity-row">
                     <span className="defect-severity-label">Severity</span>
@@ -47,6 +47,16 @@ export function DefectCard({ defect }: DefectCardProps) {
                 <div className="defect-bar">
                     <div className="defect-bar-fill" style={{ width: barWidth, background: color }} />
                 </div>
+                {defect.measurement && (
+                    <div className="defect-measurement">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>straighten</span>
+                        <span>
+                            {defect.measurement.width_mm != null && defect.measurement.length_mm != null
+                                ? `${defect.measurement.width_mm}mm x ${defect.measurement.length_mm}mm`
+                                : defect.measurement.notes}
+                        </span>
+                    </div>
+                )}
             </div>
         </article>
     );

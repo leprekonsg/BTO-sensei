@@ -9,6 +9,14 @@ export interface TapResult {
   commentary: string;
 }
 
+export interface Measurement {
+  width_mm?: number;
+  length_mm?: number;
+  depth_mm?: string;
+  reference_object: string;
+  notes: string;
+}
+
 export interface Defect {
   id: string;
   room: string;
@@ -19,6 +27,7 @@ export interface Defect {
   confidence: number;
   photo_url?: string;
   timestamp: number;
+  measurement?: Measurement;
 }
 
 export interface RoomScore {
@@ -34,7 +43,10 @@ export interface InspectionReport {
   room_scores: RoomScore[];
   priority_defects: Defect[];
   inspector_note: string;
+  cover_summary?: string;
 }
+
+export type FlatType = "3-room" | "4-room" | "5-room";
 
 export interface BlueprintCoord {
   defect_id: string;
@@ -59,6 +71,8 @@ export interface FailureModes {
 export interface BTOStore {
   currentRoom: RoomName;
   setCurrentRoom: (room: RoomName) => void;
+  flatType: FlatType;
+  setFlatType: (type: FlatType) => void;
   audioMode: AudioMode;
   setAudioMode: (mode: AudioMode) => void;
   lastTapResult: AsyncState<TapResult>;
@@ -101,7 +115,12 @@ export interface UseBTOAudioReturn {
 
 export interface UseCameraReturn {
   captureFrame: () => Promise<string | null>;
-  sendToVision: (frameUrl: string, prompt?: string) => Promise<void>;
+  sendToVision: (frameUrl: string, prompt?: string, measureMode?: boolean) => Promise<void>;
+  loadFromFile: (file: File) => Promise<void>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  streamActive: boolean;
+  cameraError: string | null;
+  startStream: () => Promise<void>;
 }
 
 export interface AcousticToolPayload {

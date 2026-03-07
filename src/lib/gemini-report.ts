@@ -1,8 +1,9 @@
 import { getGeminiClient } from "../hooks/use-bto-config";
-import { ROOM_CENTERS } from "./room-geometry";
+import { getRoomCenters } from "./room-geometry";
 import type {
   BlueprintCoord,
   Defect,
+  FlatType,
   InspectionReport,
   RoomName,
   RoomScore,
@@ -148,12 +149,11 @@ Return ONLY valid JSON, no markdown fences.`;
   };
 }
 
-// ROOM_CENTERS is imported from ../components/bto/FloorPlanSVG to stay synced with geometry
-
-export function deriveBlueprintCoords(defects: Defect[]): BlueprintCoord[] {
+export function deriveBlueprintCoords(defects: Defect[], flatType: FlatType = "4-room"): BlueprintCoord[] {
+  const centers = getRoomCenters(flatType);
   return defects.map((defect, index) => {
     const roomCenter =
-      ROOM_CENTERS[defect.room as RoomName] ?? ROOM_CENTERS["Living Room"];
+      centers[defect.room as RoomName] ?? centers["Living Room"];
     const offsetX = (index % 3) * 18 - 14;
     const offsetY = Math.floor(index / 3) * 16 - 10;
 
@@ -165,4 +165,44 @@ export function deriveBlueprintCoords(defects: Defect[]): BlueprintCoord[] {
       label: defect.defect_type,
     };
   });
+}
+
+/** Generate a professional cover summary for the inspection report */
+export async function generateCoverSummary(
+  report: InspectionReport,
+  flatType: FlatType,
+): Promise<string> {
+  const client = getGeminiClient();
+  if (!client) {
+    return generateLocalCoverSummary(report, flatType);
+  }
+
+  const prompt = `You are Ah Seng, a veteran BTO inspector in Singapore. Write a 2-3 sentence executive summary for the cover page of an HDB ${flatType} flat inspection report.
+
+Flat ID: ${report.flat_id}
+Date: ${report.inspection_date}
+Overall Score: ${report.overall_health_score}/100
+Total Defects: ${report.priority_defects.length}
+Critical Issues: ${report.priority_defects.filter(d => d.severity === "Critical").length}
+
+Write in professional English (not Singlish). Be concise and authoritative. Return ONLY the summary text, no JSON.`;
+
+  const response = await client.models.generateContent({
+    model: REPORT_MODEL,
+    contents: prompt,
+  });
+
+  return response.text?.trim() || generateLocalCoverSummary(report, flatType);
+}
+
+function generateLocalCoverSummary(report: InspectionReport, flatType: FlatType): string {
+  const criticalCount = report.priority_defects.filter(d => d.severity === "Critical").length;
+  const score = report.overall_health_score;
+  const verdict = score >= 85 ? "excellent" : score >= 70 ? "acceptable" : "below standard";
+
+  return `This ${flatType} HDB unit (${report.flat_id}) achieved a structural integrity score of ${score}/100, rated ${verdict}. ${
+    criticalCount > 0
+      ? `${criticalCount} critical defect${criticalCount > 1 ? "s" : ""} require${criticalCount === 1 ? "s" : ""} immediate contractor attention before handover acceptance.`
+      : "No critical defects were identified during this inspection cycle."
+  }`;
 }

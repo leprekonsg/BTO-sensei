@@ -10,9 +10,14 @@ BTO-Sensei is an AI-powered HDB (Housing & Development Board) inspection assista
 
 - **Acoustic Scan**: Canvas-based FFT spectrogram visualizing tap frequencies in real-time. "Ah Seng" (AI safety officer persona) provides Singlish commentary based on DSP classification (hollow vs. solid tiles).
 - **Defect Logger**: Camera viewfinder for capturing defect photos. Defects are logged into a scrollable list with severity badges, recommendations, and chop-stamp animations.
-- **Report Dashboard**: Health score gauge, room-by-room breakdown, and SVG floor plan with defect markers.
+- **Vision Measurement**: Viewfinder measurement toggle indicating a dashed coin-placement guide for Gemini dimension estimation against a standard SG 50-cent coin (24.66mm). 
+- **Report Dashboard**: Professional cover page displaying case metadata, AI-generated executive summaries, health score gauges, and room-by-room breakdowns.
+- **HDB Floor Plan Integration**: Dynamic SVG floor plan layouts corresponding to selectable real HDB flat types (3-room, 4-room, 5-room) for accurate spatial mapping.
+- **Nano Banana Blueprint**: Interactive blueprint component with toggleable, color-coded callout boxes and leader lines mapping defect markers.
 
 ## Architecture
+
+![Architecture Diagram](./public/architecture_diagram.png)
 
 Fully client-side. Two-agent parallel execution (Frontend + Backend) with strict file ownership to prevent merge conflicts.
 
@@ -35,10 +40,7 @@ The UI was constructed using **Stitch MCP** and **Antigravity**. Stitch MCP prov
 
 ## Future Plans
 
-- **Vision Measurement**: Gemini Code Execution with OpenCV for reference-coin measurement of cracks and gaps
-- **Nano Banana Blueprint**: Imagen 3-generated annotated floor plan with defect markers
-- **Report Cover**: AI-generated cover page for inspection reports
-- **HDB Floor Plan Integration**: Real BTO flat type floor plans for spatial defect mapping
+- **Live Video Overlays**: Implement real-time AR bounding boxes and structural edge detection overlaid directly on the live camera viewfinder via Canvas/WebRTC to dynamically highlight and track likely defects as the user scans the room.
 
 ## Getting Started
 

@@ -1,6 +1,11 @@
+import { useState } from "react";
 import { useBTOStore } from "../../lib/store";
+import { generateCoverSummary } from "../../lib/gemini-report";
 import { FloorPlanSVG } from "./FloorPlanSVG";
+import type { FlatType } from "../../lib/types";
 import "./ReportDashboard.css";
+
+const FLAT_TYPES: FlatType[] = ["3-room", "4-room", "5-room"];
 
 export function ReportDashboard() {
   const report = useBTOStore((s) => s.report);
@@ -8,6 +13,25 @@ export function ReportDashboard() {
   const defects = useBTOStore((s) => s.defects);
   const requestReport = useBTOStore((s) => s.requestReport);
   const inspectorMessage = useBTOStore((s) => s.inspectorMessage);
+  const flatType = useBTOStore((s) => s.flatType);
+  const setFlatType = useBTOStore((s) => s.setFlatType);
+  const [coverSummary, setCoverSummary] = useState<string | null>(null);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [showAnnotations, setShowAnnotations] = useState(false);
+
+  async function handleGenerateReport() {
+    await requestReport("HB-402-A");
+    const reportData = useBTOStore.getState().report.data;
+    if (reportData) {
+      setCoverLoading(true);
+      try {
+        const summary = await generateCoverSummary(reportData, flatType);
+        setCoverSummary(summary);
+      } finally {
+        setCoverLoading(false);
+      }
+    }
+  }
 
   // Loading state
   if (report.loading) {
@@ -37,12 +61,29 @@ export function ReportDashboard() {
           </div>
           <span className="report-badge font-mono">Official Doc</span>
         </div>
+
+        {/* Flat type selector */}
+        <div className="flat-type-selector">
+          <span className="flat-type-label font-mono">FLAT TYPE</span>
+          <div className="flat-type-options">
+            {FLAT_TYPES.map((type) => (
+              <button
+                key={type}
+                className={`flat-type-btn font-mono ${flatType === type ? "flat-type-btn--active" : ""}`}
+                onClick={() => setFlatType(type)}
+              >
+                {type.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="report-empty">
           <p>Log defects first, then generate a report.</p>
           <p className="font-mono text-dim">Defects logged: {defects.length}</p>
           <button
             className="report-generate-btn"
-            onClick={() => requestReport("HB-402-A")}
+            onClick={handleGenerateReport}
             disabled={defects.length === 0}
             data-testid="generate-report"
           >
@@ -61,6 +102,49 @@ export function ReportDashboard() {
 
   return (
     <div className="report-section" data-testid="report-dashboard">
+      {/* Cover Page */}
+      <div className="report-cover">
+        <div className="report-cover-inner">
+          <div className="report-cover-badge font-mono">OFFICIAL INSPECTION DOCUMENT</div>
+          <div className="report-cover-logo">
+            <img src="/bto_sensei_logo_transparent.png" alt="BTO-Sensei" className="report-cover-logo-img" />
+          </div>
+          <h1 className="report-cover-title">BTO INSPECTION REPORT</h1>
+          <p className="report-cover-edition font-mono">NANO BANANA EDITION // {flatType.toUpperCase()} FLAT</p>
+          <div className="report-cover-meta">
+            <div className="report-cover-meta-item">
+              <span className="font-mono text-dim">CASE ID</span>
+              <span className="font-mono">{data.flat_id}</span>
+            </div>
+            <div className="report-cover-meta-item">
+              <span className="font-mono text-dim">DATE</span>
+              <span className="font-mono">{data.inspection_date}</span>
+            </div>
+            <div className="report-cover-meta-item">
+              <span className="font-mono text-dim">SCORE</span>
+              <span className="font-mono text-primary">{score}/100</span>
+            </div>
+            <div className="report-cover-meta-item">
+              <span className="font-mono text-dim">DEFECTS</span>
+              <span className="font-mono">{defects.length}</span>
+            </div>
+          </div>
+          {coverLoading && (
+            <div className="report-cover-summary font-mono text-dim">Generating executive summary...</div>
+          )}
+          {coverSummary && (
+            <div className="report-cover-summary">
+              <p>{coverSummary}</p>
+            </div>
+          )}
+          <div className="report-cover-stamp stamp-effect">
+            <div className="report-stamp-label">Verified By</div>
+            <div className="report-stamp-value">{score >= 70 ? "PASSED" : "REVIEW"}</div>
+            <div className="report-stamp-sub">Ah Seng // BTO-Sensei</div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="report-header-section">
         <div className="report-header-meta">
@@ -112,19 +196,27 @@ export function ReportDashboard() {
         </div>
       </div>
 
-      {/* Blueprint */}
+      {/* Blueprint - Nano Banana Blueprint */}
       <div className="report-blueprint-section">
         <div className="report-blueprint-header">
           <h4 className="report-blueprint-title">
             <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>architecture</span>
-            Blueprint Ref: {data.flat_id}
+            Nano Banana Blueprint: {data.flat_id}
           </h4>
-          <span className="font-mono text-dim" style={{ fontSize: 10 }}>SCALE 1:50</span>
+          <div className="report-blueprint-controls">
+            <button
+              className={`blueprint-annotate-btn font-mono ${showAnnotations ? "blueprint-annotate-btn--active" : ""}`}
+              onClick={() => setShowAnnotations(!showAnnotations)}
+            >
+              {showAnnotations ? "LABELS ON" : "LABELS OFF"}
+            </button>
+            <span className="font-mono text-dim" style={{ fontSize: 10 }}>SCALE 1:50</span>
+          </div>
         </div>
         <div className="report-blueprint-container blueprint-grid">
-          <FloorPlanSVG coords={coords.data ?? []} />
+          <FloorPlanSVG coords={coords.data ?? []} flatType={flatType} showAnnotations={showAnnotations} />
           <div className="report-blueprint-status font-mono">
-            Live Sensor Data Feed: Connected
+            Live Sensor Data Feed: Connected // {flatType.toUpperCase()} Layout
           </div>
         </div>
       </div>

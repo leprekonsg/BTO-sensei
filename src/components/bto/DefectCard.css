@@ -80,3 +80,17 @@
     transition: width 0.4s ease;
     border-radius: var(--radius-full);
 }
+
+.defect-measurement {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 4px 6px;
+    background: rgba(250, 204, 21, 0.08);
+    border: 1px solid rgba(250, 204, 21, 0.2);
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--hazard);
+}
