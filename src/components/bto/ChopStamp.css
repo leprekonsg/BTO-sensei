@@ -1,0 +1,21 @@
+.chop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.chop-stamp {
+    transform: rotate(-12deg);
+    border: 8px double #dc2626;
+    color: #dc2626;
+    text-transform: uppercase;
+    font-weight: 900;
+    font-size: 32px;
+    padding: 8px 24px;
+    opacity: 0.85;
+    letter-spacing: 0.05em;
+}

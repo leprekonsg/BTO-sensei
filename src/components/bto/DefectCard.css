@@ -1,0 +1,82 @@
+.defect-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: var(--navy-900);
+    animation: fade-in 0.3s ease-out both;
+    content-visibility: auto;
+}
+
+.defect-thumb {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--bg-input);
+}
+
+.defect-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.defect-thumb--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+}
+
+.defect-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.defect-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.defect-type {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.defect-id {
+    font-size: 10px;
+    opacity: 0.5;
+    color: var(--text-muted);
+}
+
+.defect-severity-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.defect-severity-label {
+    color: var(--text-muted);
+}
+
+.defect-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-input);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.defect-bar-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+    border-radius: var(--radius-full);
+}

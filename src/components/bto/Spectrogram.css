@@ -1,0 +1,52 @@
+.spectrogram-wrap {
+    position: relative;
+    aspect-ratio: 16/9;
+    background: #000;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    margin: 0 16px;
+}
+
+.spectrogram-overlay-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.1;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(249, 115, 22, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(249, 115, 22, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.spectrogram-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.spectrogram-hud-left {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--acid-green);
+}
+
+.spectrogram-hud-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(249, 115, 22, 0.2);
+    border: 1px solid var(--safety-orange);
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--safety-orange);
+    text-transform: uppercase;
+}

@@ -1,0 +1,87 @@
+.audio-capture {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mode-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 2px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.mode-btn--active {
+    background: var(--safety-orange);
+    border-color: var(--safety-orange);
+    color: white;
+}
+
+.tap-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: none;
+    border-radius: var(--radius-xl);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.tap-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.tap-btn--primary {
+    width: 100%;
+    padding: 16px;
+    background: var(--safety-orange);
+    color: white;
+    font-size: 15px;
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+}
+
+.tap-btn--primary:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.tap-actions-secondary {
+    display: flex;
+    gap: 8px;
+}
+
+.tap-btn--secondary {
+    flex: 1;
+    padding: 12px;
+    background: var(--deep-charcoal);
+    border: 2px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+}

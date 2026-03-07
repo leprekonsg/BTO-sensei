@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Defect Logger: Heartlands Edition</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ec5b13", // Safety Orange
+                        "background-light": "#f8f6f6",
+                        "background-dark": "#221610", // Deep Charcoal
+                        "hazard": "#facc15", // High-visibility Yellow
+                        "industrial-gray": "#3f3f46",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem", 
+                        "lg": "0.25rem", 
+                        "xl": "0.5rem", 
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .industrial-border {
+            border: 2px solid #3f3f46;
+            box-shadow: 4px 4px 0px 0px #3f3f46;
+        }
+        .chop-stamp {
+            transform: rotate(-12deg);
+            border: 4px double #dc2626;
+            color: #dc2626;
+            text-transform: uppercase;
+            font-weight: 900;
+            padding: 4px 8px;
+            opacity: 0.85;
+        }
+        .hud-scanline {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col items-center">
+<div class="relative w-full max-w-md bg-background-light dark:bg-background-dark min-h-screen flex flex-col border-x-4 border-industrial-gray">
+<!-- Header -->
+<header class="bg-primary text-white p-4 flex justify-between items-center border-b-4 border-industrial-gray">
+<div class="flex flex-col">
+<span class="text-xs font-black tracking-widest uppercase opacity-80">Heartlands Edition</span>
+<h1 class="text-xl font-black italic uppercase leading-none">Defect Logger</h1>
+</div>
+<div class="flex items-center gap-3">
+<div class="bg-black/20 p-2 rounded">
+<span class="material-symbols-outlined block">sensors</span>
+</div>
+<button class="bg-hazard text-black font-black p-2 rounded-lg">
+<span class="material-symbols-outlined block">warning</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 p-4 space-y-6">
+<!-- Unit Info Section -->
+<section class="industrial-border bg-white dark:bg-zinc-900 p-4 space-y-4">
+<h2 class="text-xs font-black uppercase text-primary tracking-tighter border-b-2 border-primary/20 pb-1">HDB Standard Check - Site 88A</h2>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col">
+<label class="text-[10px] font-bold uppercase opacity-60">Block No.</label>
+<input class="bg-zinc-100 dark:bg-zinc-800 border-2 border-industrial-gray font-black text-lg p-2 focus:ring-primary focus:border-primary" type="text" value="321B"/>
+</div>
+<div class="flex flex-col">
+<label class="text-[10px] font-bold uppercase opacity-60">Unit No.</label>
+<input class="bg-zinc-100 dark:bg-zinc-800 border-2 border-industrial-gray font-black text-lg p-2 focus:ring-primary focus:border-primary" type="text" value="#12-452"/>
+</div>
+</div>
+</section>
+<!-- Camera Viewfinder -->
+<section class="relative aspect-square w-full bg-black industrial-border overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center opacity-40">
+<img class="w-full h-full object-cover" data-alt="Close up of cracked concrete wall with water damage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0odg0FPUDFqsneto_TuQzVHBS776Vrv8FtGEL1J_tZwZ13z1qWr0_ea1xEnB51eLDj_UDM8P9zFoIDoh7cT45Sg6jKxcmQE67eiaWPKK77ECU9zjIEUycT1Qg9S5PijiQa1qYfMo6x9cVcyZE-AIgDhSSw3tZKXxgoBmmhrkUuBNQsFrkYBYyOs-EgidmnqXbyV1BoozFi309rQXz4E9q9TD_kF_xaXTJgillXHQYGPmVgmH95V3lYaH56RzubTP-ECdsZ1jLaCc"/>
+</div>
+<!-- Viewfinder UI -->
+<div class="absolute inset-0 border-[20px] border-black/20 pointer-events-none"></div>
+<div class="absolute top-4 left-4 border-t-4 border-l-4 border-hazard w-12 h-12"></div>
+<div class="absolute top-4 right-4 border-t-4 border-r-4 border-hazard w-12 h-12"></div>
+<div class="absolute bottom-4 left-4 border-b-4 border-l-4 border-hazard w-12 h-12"></div>
+<div class="absolute bottom-4 right-4 border-b-4 border-r-4 border-hazard w-12 h-12"></div>
+<div class="absolute top-1/2 left-0 w-full border-t border-hazard/30"></div>
+<div class="absolute top-0 left-1/2 h-full border-l border-hazard/30"></div>
+<div class="hud-scanline absolute inset-0"></div>
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4">
+<button class="bg-white/10 backdrop-blur-md text-white p-3 rounded-full border border-white/20">
+<span class="material-symbols-outlined">image</span>
+</button>
+<button class="bg-primary text-white size-16 rounded-full border-4 border-white flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-4xl">photo_camera</span>
+</button>
+<button class="bg-white/10 backdrop-blur-md text-white p-3 rounded-full border border-white/20">
+<span class="material-symbols-outlined">sync</span>
+</button>
+</div>
+</section>
+<!-- Defect List -->
+<section class="space-y-3">
+<h3 class="font-black uppercase text-sm flex items-center gap-2">
+<span class="bg-industrial-gray text-white px-2 py-0.5">Detected Items</span>
+<span class="text-primary">03 Total</span>
+</h3>
+<!-- Log Item 1 (Chopped) -->
+<div class="relative industrial-border bg-white dark:bg-zinc-900 p-3 flex gap-3 overflow-hidden">
+<div class="w-16 h-16 bg-zinc-200 shrink-0">
+<img class="w-full h-full object-cover" data-alt="Cracked tile detail thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbbME3LGipt6twsUVuyM5YfTAwPoeZgAs1kZFS7b94i1xA7duWPf-I1r8TKSX7AcB21bdoqn9DfUD_e3eFRIsdX5w3WTgpLxRNUqFz-XsIUCbBLFJJgXk9X-vgagqEaNgZpdQumOvV0PU4hliAq70dMczwDzn-NOonUxStGWr8945gjV-ViqffmGYpkSy5muJ8UfGNtDieBGTGrwRxPAKFIT-e2sGjJmeZJ7mBmqUkE8lZD6bLfTebffvLt-hLSSgvUOsyNWTitm8"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<span class="font-black uppercase text-xs">Floor Tile Crack</span>
+<span class="text-[10px] font-mono opacity-50">#DF-092</span>
+</div>
+<div class="mt-2 space-y-1">
+<div class="flex justify-between text-[10px] font-bold uppercase">
+<span>Severity</span>
+<span class="text-red-500">Critical</span>
+</div>
+<div class="w-full h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+<div class="bg-red-500 h-full w-[90%]"></div>
+</div>
+</div>
+</div>
+<!-- Chop Stamp -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="chop-stamp text-xl border-8 px-4 py-1">APPROVED</div>
+</div>
+</div>
+<!-- Log Item 2 -->
+<div class="industrial-border bg-white dark:bg-zinc-900 p-3 flex gap-3">
+<div class="w-16 h-16 bg-zinc-200 shrink-0">
+<img class="w-full h-full object-cover grayscale" data-alt="Wall paint peeling thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVZnUT3eGIS778r3bDQvOVoAydf3t6603YKVGDtMFszG4laXcT5D1ae04X1sjOlMKV75Yo4BUfEyOokSNjGoep5rCteOhRfe-3Rv3QMgoWEqcFLXPpWl9arVt8tuvQjSUl_kNcGPVqYpKKR18yXUnNJm9cuu-tOnTPZ-1hJlOjcsAiky5mzmvMkG3iIvSXMyLXI7ing0KmqH6DB8PqgIYAA1JXtmNdDDEL57UwRkedXn7zC4NZ30Hv_81P-AmQGyMLOOR3X7UnwqU"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<span class="font-black uppercase text-xs">Paint Spalling</span>
+<span class="text-[10px] font-mono opacity-50">#DF-104</span>
+</div>
+<div class="mt-2 space-y-1">
+<div class="flex justify-between text-[10px] font-bold uppercase">
+<span>Severity</span>
+<span class="text-primary">Medium</span>
+</div>
+<div class="w-full h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[45%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Log Item 3 -->
+<div class="industrial-border bg-white dark:bg-zinc-900 p-3 flex gap-3">
+<div class="w-16 h-16 bg-zinc-200 shrink-0">
+<img class="w-full h-full object-cover grayscale" data-alt="Loose window hinge thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQ64Wp1ry3uf9OzUlyTkbr55OaE6x252rdYcPITSnOiHCvhLe-VsrJ4DwJkEUKWbnVNlSHcvmFsJSosKATMJ01GqNPp4YWmjOnEJgMUH3TFQsk9Kdj2YxxXX8y4sm3euDkkU4zjz3EAEotv-qSKQJAndUjedXybJdrs6gZyODEnk4y9qm4dWt_Nz-X42pjBAwSpEC7vv3H-9VCXu0tM1LaxqU2qW36Ki-qSKRA-E23Jffss-wlLs50f9HUiRTRl_gsPChJG0qjGfw"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<span class="font-black uppercase text-xs">Loose Casement</span>
+<span class="text-[10px] font-mono opacity-50">#DF-012</span>
+</div>
+<div class="mt-2 space-y-1">
+<div class="flex justify-between text-[10px] font-bold uppercase">
+<span>Severity</span>
+<span class="text-hazard">Low</span>
+</div>
+<div class="w-full h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+<div class="bg-hazard h-full w-[20%]"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Action Area -->
+<footer class="p-4 bg-zinc-100 dark:bg-zinc-900 border-t-4 border-industrial-gray sticky bottom-0">
+<button class="w-full bg-primary text-white py-6 rounded border-b-8 border-r-4 border-black active:border-b-2 active:border-r-2 active:translate-y-1 active:translate-x-0.5 transition-all flex flex-col items-center justify-center gap-1 group">
+<span class="text-2xl font-black italic uppercase tracking-tighter group-active:scale-95">Confirm &amp; Chop!</span>
+<span class="text-[10px] font-bold uppercase opacity-80 tracking-[0.2em]">Official HDB Submission</span>
+</button>
+<!-- Bottom Navigation Bar -->
+<div class="flex gap-2 bg-industrial-gray p-2 mt-4 rounded">
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined">assignment_late</span>
+<p class="text-[10px] font-black uppercase">Logger</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-white opacity-50" href="#">
+<span class="material-symbols-outlined">history</span>
+<p class="text-[10px] font-black uppercase">History</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-white opacity-50" href="#">
+<span class="material-symbols-outlined">fact_check</span>
+<p class="text-[10px] font-black uppercase">Standards</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 text-white opacity-50" href="#">
+<span class="material-symbols-outlined">person</span>
+<p class="text-[10px] font-black uppercase">Inspector</p>
+</a>
+</div>
+</footer>
+</div>
+</body></html>

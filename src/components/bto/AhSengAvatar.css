@@ -1,0 +1,102 @@
+.ahseng-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    margin: 8px 16px;
+    border-radius: var(--radius-xl);
+    border-left: 8px solid var(--safety-orange);
+    background: rgba(30, 41, 59, 0.4);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.ahseng-watermark {
+    position: absolute;
+    bottom: -8px;
+    right: -8px;
+    font-size: 64px;
+    font-weight: 900;
+    font-style: italic;
+    opacity: 0.04;
+    pointer-events: none;
+    color: var(--text);
+}
+
+.ahseng-avatar-wrap {
+    flex-shrink: 0;
+    position: relative;
+}
+
+.ahseng-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 4px solid var(--safety-orange);
+    background: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ahseng-avatar-icon {
+    font-size: 40px;
+    color: var(--safety-orange);
+}
+
+.ahseng-verified {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--safety-orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: 2px solid white;
+}
+
+.ahseng-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.ahseng-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ahseng-name {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.ahseng-role {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--industrial-gray);
+    padding: 2px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.ahseng-message {
+    margin-top: 8px;
+    font-size: 14px;
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+}

@@ -1,0 +1,51 @@
+.unit-info {
+    margin: 0 16px;
+    background: var(--bg-card);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.unit-info-title {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: var(--primary);
+    letter-spacing: -0.05em;
+    border-bottom: 2px solid rgba(236, 91, 19, 0.2);
+    padding-bottom: 4px;
+}
+
+.unit-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.unit-info-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.unit-info-field label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+.unit-info-field input {
+    background: var(--bg-input);
+    border: 2px solid var(--industrial-gray);
+    font-weight: 900;
+    font-size: 18px;
+    padding: 8px;
+    color: var(--text);
+    outline: none;
+}
+
+.unit-info-field input:focus {
+    border-color: var(--primary);
+}

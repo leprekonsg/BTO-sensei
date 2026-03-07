@@ -1,0 +1,194 @@
+.camera-section {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Viewfinder */
+.viewfinder {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    background: #000;
+    overflow: hidden;
+}
+
+.viewfinder-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.6;
+}
+
+.viewfinder-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+/* Corners */
+.corner {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-color: var(--hazard);
+    border-style: solid;
+    border-width: 0;
+}
+
+.corner--tl {
+    top: 16px;
+    left: 16px;
+    border-top-width: 4px;
+    border-left-width: 4px;
+}
+
+.corner--tr {
+    top: 16px;
+    right: 16px;
+    border-top-width: 4px;
+    border-right-width: 4px;
+}
+
+.corner--bl {
+    bottom: 16px;
+    left: 16px;
+    border-bottom-width: 4px;
+    border-left-width: 4px;
+}
+
+.corner--br {
+    bottom: 16px;
+    right: 16px;
+    border-bottom-width: 4px;
+    border-right-width: 4px;
+}
+
+/* Crosshairs */
+.crosshair-h {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    border-top: 1px solid rgba(250, 204, 21, 0.25);
+}
+
+.crosshair-v {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 100%;
+    border-left: 1px solid rgba(250, 204, 21, 0.25);
+}
+
+/* Controls */
+.viewfinder-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.vf-btn {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    color: white;
+    padding: 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+}
+
+.vf-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.vf-capture-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: white;
+    border: 4px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.vf-capture-btn:active:not(:disabled) {
+    transform: scale(0.93);
+}
+
+.vf-capture-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Input */
+.inspect-note-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+}
+
+.inspect-note-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 14px;
+    resize: none;
+}
+
+.inspect-note-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* Analyze */
+.analyze-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-xl);
+    font-weight: 900;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.analyze-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.analyze-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}

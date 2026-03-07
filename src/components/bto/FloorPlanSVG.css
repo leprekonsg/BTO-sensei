@@ -1,0 +1,10 @@
+.floor-plan-wrap {
+    width: 100%;
+    height: 100%;
+}
+
+.floor-plan-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
