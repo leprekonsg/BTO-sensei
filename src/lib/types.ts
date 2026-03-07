@@ -84,6 +84,8 @@ export interface BTOStore {
   setInspectorMessage: (message: string) => void;
   failureModes: FailureModes;
   setFailureMode: (mode: FailureMode, enabled: boolean) => void;
+  apiKeyVersion: number;
+  bumpApiKeyVersion: () => void;
 }
 
 export interface UseBTOAudioReturn {

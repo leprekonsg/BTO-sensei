@@ -39,57 +39,75 @@ export function useGeminiTools() {
       if (!toolCall?.functionCalls) return;
 
       const session = getActiveSession();
-      const functionResponses: Array<{ id: string; name: string; response: { result: string } }> = [];
+      const functionResponses: Array<{
+        id: string;
+        name: string;
+        response: { result?: string; error?: string };
+      }> = [];
 
       for (const fc of toolCall.functionCalls) {
-        switch (fc.name) {
-          case "report_acoustic_result": {
-            const payload = fc.args as unknown as AcousticToolPayload;
-            storeRef.current.setLastTapResult({
-              data: {
-                type: payload.tile_type,
+        try {
+          switch (fc.name) {
+            case "report_acoustic_result": {
+              const payload = fc.args as unknown as AcousticToolPayload;
+              storeRef.current.setLastTapResult({
+                data: {
+                  type: payload.tile_type,
+                  confidence: payload.confidence,
+                  commentary: (fc.args as Record<string, unknown>).commentary as string || "",
+                },
+                loading: false,
+                error: null,
+              });
+              storeRef.current.setInspectorMessage(
+                (fc.args as Record<string, unknown>).commentary as string ||
+                  `Tile classified as ${payload.tile_type} (${(payload.confidence * 100).toFixed(0)}% confident)`,
+              );
+              functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
+              break;
+            }
+
+            case "log_defect": {
+              const payload = fc.args as unknown as LogDefectToolPayload;
+              storeRef.current.addDefect({
+                id: nextId(),
+                room: payload.room,
+                defect_type: payload.defect_type,
+                severity: payload.severity,
+                description: payload.description,
+                recommendation: payload.recommendation,
                 confidence: payload.confidence,
-                commentary: (fc.args as Record<string, unknown>).commentary as string || "",
-              },
-              loading: false,
-              error: null,
-            });
-            storeRef.current.setInspectorMessage(
-              (fc.args as Record<string, unknown>).commentary as string ||
-                `Tile classified as ${payload.tile_type} (${(payload.confidence * 100).toFixed(0)}% confident)`,
-            );
-            functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
-            break;
-          }
+                timestamp: Date.now(),
+              });
+              storeRef.current.setInspectorMessage(
+                `${payload.defect_type} logged in ${payload.room}. Severity: ${payload.severity}.`,
+              );
+              functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
+              break;
+            }
 
-          case "log_defect": {
-            const payload = fc.args as unknown as LogDefectToolPayload;
-            storeRef.current.addDefect({
-              id: nextId(),
-              room: payload.room,
-              defect_type: payload.defect_type,
-              severity: payload.severity,
-              description: payload.description,
-              recommendation: payload.recommendation,
-              confidence: payload.confidence,
-              timestamp: Date.now(),
-            });
-            storeRef.current.setInspectorMessage(
-              `${payload.defect_type} logged in ${payload.room}. Severity: ${payload.severity}.`,
-            );
-            functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
-            break;
-          }
+            case "generate_report": {
+              const payload = fc.args as unknown as GenerateReportToolPayload;
+              void storeRef.current.requestReport(payload.flat_id);
+              functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
+              break;
+            }
 
-          case "generate_report": {
-            const payload = fc.args as unknown as GenerateReportToolPayload;
-            storeRef.current.requestReport(payload.flat_id);
-            functionResponses.push({ id: fc.id, name: fc.name, response: { result: "ok" } });
-            break;
+            default:
+              functionResponses.push({
+                id: fc.id,
+                name: fc.name,
+                response: { error: "unknown tool" },
+              });
           }
-
-          default:
-            functionResponses.push({ id: fc.id, name: fc.name, response: { result: "unknown tool" } });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Tool handling failed";
+          storeRef.current.setInspectorMessage(`Tool sync failed: ${message}`);
+          functionResponses.push({
+            id: fc.id,
+            name: fc.name,
+            response: { error: message },
+          });
         }
       }
 
@@ -97,8 +115,9 @@ export function useGeminiTools() {
       if (session && functionResponses.length > 0) {
         try {
           session.sendToolResponse({ functionResponses });
-        } catch {
-          // Session may have closed
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Session may have closed";
+          storeRef.current.setInspectorMessage(`Live session update failed: ${message}`);
         }
       }
     };

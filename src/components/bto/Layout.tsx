@@ -1,4 +1,6 @@
 import { type ReactNode, useState } from "react";
+import { ApiKeyConfig } from "./ApiKeyConfig";
+import { useBTOStore } from "../../lib/store";
 import "./Layout.css";
 
 export type ViewTab = "scan" | "logger" | "report";
@@ -9,6 +11,14 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [activeTab, setActiveTab] = useState<ViewTab>("scan");
+  const sessionConnected = useBTOStore((s) => s.sessionConnected);
+  const sessionError = useBTOStore((s) => s.sessionError);
+
+  const statusLabel = sessionConnected
+    ? "Ah Seng Online"
+    : sessionError
+      ? "Offline"
+      : "Connecting...";
 
   return (
     <div className="layout-root kopi-stain hdb-grid">
@@ -16,18 +26,30 @@ export function Layout({ children }: LayoutProps) {
       <header className="layout-header">
         <div className="header-brand">
           <span className="header-sector font-mono">SECTOR 7-B</span>
-          <h1 className="header-title">
-            BTO-SENSEI <span className="text-primary">V2.1</span>
-          </h1>
+          <div className="header-title-row">
+            <img src="/bto_sensei_logo_transparent.png" alt="BTO-Sensei Logo" className="header-logo" />
+            <h1 className="header-title">
+              BTO-SENSEI <span className="text-primary">V0.1</span>
+            </h1>
+          </div>
         </div>
-        <div className="header-status erp-pulse">
-          <div className="status-dot" />
-          <span className="font-mono">Ah Seng Online</span>
+        <div
+          className={`header-status ${sessionConnected ? "erp-pulse" : ""}`}
+          style={!sessionConnected ? { color: "var(--text-dim, #888)" } : undefined}
+        >
+          <div
+            className="status-dot"
+            style={!sessionConnected ? { background: "var(--text-dim, #888)", animation: "none" } : undefined}
+          />
+          <span className="font-mono">{statusLabel}</span>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="layout-main">{children(activeTab)}</main>
+      <main className="layout-main">
+        <ApiKeyConfig />
+        {children(activeTab)}
+      </main>
 
       {/* Bottom Navigation */}
       <nav className="layout-nav">
@@ -41,7 +63,7 @@ export function Layout({ children }: LayoutProps) {
           icon="analytics"
           label="Stats"
           active={false}
-          onClick={() => {}}
+          onClick={() => { }}
         />
 
         {/* Center mic button */}

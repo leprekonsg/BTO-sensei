@@ -59,37 +59,54 @@ export async function recordMicTap(durationMs = 1000): Promise<AudioBuffer> {
   if (ctx.state === "suspended") await ctx.resume();
 
   const mediaSource = ctx.createMediaStreamSource(stream);
-  const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-  const chunks: Blob[] = [];
+  const processor = ctx.createScriptProcessor(4096, 1, 1);
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
 
   return new Promise<AudioBuffer>((resolve, reject) => {
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
+    const chunks: Float32Array[] = [];
+    let cleanedUp = false;
 
-    recorder.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
+    function cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      processor.disconnect();
       mediaSource.disconnect();
+      sink.disconnect();
+      stream.getTracks().forEach((track) => track.stop());
+    }
 
-      try {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-        resolve(audioBuffer);
-      } catch (err) {
-        reject(err);
-      }
+    processor.onaudioprocess = (event) => {
+      const input = event.inputBuffer.getChannelData(0);
+      chunks.push(new Float32Array(input));
     };
 
-    recorder.onerror = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      mediaSource.disconnect();
-      reject(new Error("Mic recording failed"));
-    };
+    mediaSource.connect(processor);
+    processor.connect(sink);
+    sink.connect(ctx.destination);
 
-    recorder.start();
     setTimeout(() => {
-      if (recorder.state === "recording") recorder.stop();
+      try {
+        const totalSamples = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        if (!totalSamples) {
+          throw new Error("No microphone audio captured");
+        }
+
+        const audioBuffer = ctx.createBuffer(1, totalSamples, ctx.sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        let offset = 0;
+
+        for (const chunk of chunks) {
+          channelData.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        cleanup();
+        resolve(audioBuffer);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
     }, durationMs);
   });
 }

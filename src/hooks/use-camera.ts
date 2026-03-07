@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { getGeminiClient } from "./use-bto-config";
-import { FALLBACKS, withRetryAndFallback } from "../lib/fallback";
+import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "../lib/fallback";
+import { sendVisionToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
 import type { Defect, Severity, UseCameraReturn } from "../lib/types";
 
@@ -21,6 +22,20 @@ export function useCamera(): UseCameraReturn {
   const setInspectorMessage = useBTOStore((state) => state.setInspectorMessage);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      }
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   async function captureFrame() {
     // Try real camera capture
@@ -146,7 +161,8 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
         } satisfies Defect;
       },
       fallback,
-      8000,
+      15000,
+      GEMINI_RATE_LIMIT_RETRY,
     );
 
     addDefect(result.data);
@@ -154,6 +170,11 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
       result.error
         ? "Vision service dropped, but I logged a fallback defect for follow-up."
         : `${result.data.defect_type} logged in ${currentRoom}.`,
+    );
+
+    void sendVisionToSession(
+      currentRoom,
+      `${result.data.defect_type} (${result.data.severity}): ${result.data.description}`,
     );
   }
 

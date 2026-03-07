@@ -69,7 +69,7 @@ export function useBTOAudio(): UseBTOAudioReturn {
 
     // Send result to Live API session for Ah Seng commentary
     if (!result.isFallback) {
-      sendAcousticToSession(result.data, currentRoom);
+      void sendAcousticToSession(result.data, currentRoom);
     }
   }
 
@@ -111,7 +111,7 @@ export function useBTOAudio(): UseBTOAudioReturn {
 
     // Send result to Live API session for Ah Seng commentary
     if (!result.isFallback) {
-      sendAcousticToSession(result.data, currentRoom);
+      void sendAcousticToSession(result.data, currentRoom);
     }
   }
 

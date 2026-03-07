@@ -1,3 +1,4 @@
+import { ApiError } from "@google/genai";
 import type { Defect, InspectionReport, TapResult } from "./types";
 
 function toErrorMessage(error: unknown) {
@@ -19,26 +20,116 @@ export interface RetryConfig {
   baseDelayMs: number;
   maxDelayMs: number;
   shouldRetry?: (error: unknown) => boolean;
+  getDelayMs?: (error: unknown, attempt: number, config: RetryConfig) => number;
 }
+
+export const GEMINI_RATE_LIMIT_RETRY: Partial<RetryConfig> = {
+  maxAttempts: 4,
+  baseDelayMs: 1000,
+  maxDelayMs: 16000,
+};
 
 const DEFAULT_RETRY: RetryConfig = {
   maxAttempts: 3,
   baseDelayMs: 500,
   maxDelayMs: 4000,
   shouldRetry: isRetryable,
+  getDelayMs: getRetryDelayMs,
 };
 
 export function isRetryable(error: unknown): boolean {
-  if (!(error instanceof Error)) return true;
-  const msg = error.message.toLowerCase();
-  if (msg.includes("api key") || msg.includes("invalid") || msg.includes("simulated")) return false;
-  return true;
+  const details = extractRetryDetails(error);
+
+  if (details.message.includes("api key") || details.message.includes("invalid") || details.message.includes("simulated")) {
+    return false;
+  }
+
+  if (details.status !== null) {
+    return [408, 409, 429, 500, 502, 503, 504].includes(details.status);
+  }
+
+  return (
+    details.message.includes("timed out") ||
+    details.message.includes("timeout") ||
+    details.message.includes("network") ||
+    details.message.includes("fetch") ||
+    details.message.includes("socket") ||
+    details.message.includes("temporarily") ||
+    details.message.includes("unavailable")
+  );
 }
 
 function backoffDelay(attempt: number, config: RetryConfig): number {
   const delay = config.baseDelayMs * Math.pow(2, attempt);
   const jitter = delay * 0.25 * (Math.random() * 2 - 1);
   return Math.min(delay + jitter, config.maxDelayMs);
+}
+
+function extractRetryDetails(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
+  let status: number | null = null;
+
+  if (error instanceof ApiError) {
+    status = error.status;
+  } else if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof (error as { status?: unknown }).status === "number"
+  ) {
+    status = (error as { status: number }).status;
+  }
+
+  return { message, status };
+}
+
+function parseRetryAfterMs(message: string): number | null {
+  const retryInSeconds = message.match(/retry (?:again )?in\s+([0-9.]+)\s*s/);
+  if (retryInSeconds) {
+    return Math.round(Number(retryInSeconds[1]) * 1000);
+  }
+
+  const retryInMilliseconds = message.match(/retry (?:again )?in\s+([0-9.]+)\s*ms/);
+  if (retryInMilliseconds) {
+    return Math.round(Number(retryInMilliseconds[1]));
+  }
+
+  const retryDelaySeconds = message.match(/retrydelay['"]?\s*[:=]\s*['"]?([0-9.]+)s/i);
+  if (retryDelaySeconds) {
+    return Math.round(Number(retryDelaySeconds[1]) * 1000);
+  }
+
+  const retryDelayMilliseconds = message.match(
+    /retrydelay['"]?\s*[:=]\s*['"]?([0-9.]+)ms/i,
+  );
+  if (retryDelayMilliseconds) {
+    return Math.round(Number(retryDelayMilliseconds[1]));
+  }
+
+  return null;
+}
+
+export function getRetryDelayMs(
+  error: unknown,
+  attempt: number,
+  config: RetryConfig,
+): number {
+  const { message, status } = extractRetryDetails(error);
+  const serverDelay = parseRetryAfterMs(message);
+
+  if (serverDelay !== null) {
+    return Math.min(serverDelay, config.maxDelayMs);
+  }
+
+  if (status === 429) {
+    return Math.min(config.baseDelayMs * Math.pow(2, attempt + 1), config.maxDelayMs);
+  }
+
+  return backoffDelay(attempt, config);
+}
+
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function withRetry<T>(
@@ -54,7 +145,7 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error;
       if (attempt < cfg.maxAttempts - 1 && cfg.shouldRetry!(error)) {
-        await new Promise((r) => setTimeout(r, backoffDelay(attempt, cfg)));
+        await sleep(cfg.getDelayMs!(error, attempt, cfg));
       }
     }
   }

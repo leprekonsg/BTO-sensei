@@ -1,68 +1,62 @@
-# BTO-Sensei V2.1: Heartlands Edition
+# BTO-Sensei
 
 <div align="center">
-  <img src="./public/bto_sensei_logo.png" alt="BTO-Sensei Logo" width="200" />
+  <img src="./public/bto_sensei_logo_transparent.png" alt="BTO-Sensei Logo" width="200" />
 </div>
 
-![BTO-Sensei Architecture](./public/architecture_diagram.png)
-
-BTO-Sensei is an AI-powered HDB (Housing & Development Board) inspection assistant. Built with React and TypeScript, it utilizes the Gemini Live API alongside custom audio classification via Digital Signal Processing (DSP) to perform real-time acoustic analysis of floor tiles, capture visible construction defects via a camera interface, and auto-generate structural integrity reports.
+BTO-Sensei is an AI-powered HDB (Housing & Development Board) inspection assistant. Built with React, TypeScript, and Vite, it uses the Gemini Live API alongside custom audio DSP to perform real-time acoustic analysis of floor tiles, capture visible construction defects via camera, and auto-generate structural integrity reports.
 
 ## Features
 
-- **Acoustic Hero (Scan)**: A canvas-based FFT spectrogram that visualizes tap frequencies in real-time, accompanied by "Ah Seng" (an AI safety officer) providing commentary based on DSP classification (e.g., hollow vs. solid tiles).
-- **Defect Logger**: A viewfinder interface allowing you to capture photos of defects, annotate them, and log them into a scrollable, persistent defect list with severity bars and chop-stamp animations.
-- **Nano Banana Report**: A comprehensive report dashboard featuring an SVG structural integrity gauge, room distribution breakdown, and a dynamic blueprint with glowing defect markers.
+- **Acoustic Scan**: Canvas-based FFT spectrogram visualizing tap frequencies in real-time. "Ah Seng" (AI safety officer persona) provides Singlish commentary based on DSP classification (hollow vs. solid tiles).
+- **Defect Logger**: Camera viewfinder for capturing defect photos. Defects are logged into a scrollable list with severity badges, recommendations, and chop-stamp animations.
+- **Report Dashboard**: Health score gauge, room-by-room breakdown, and SVG floor plan with defect markers.
 
-## Architecture & Execution Strategy
+## Architecture
 
-BTO-Sensei follows a strict **Two-Agent Parallel Execution Plan** (Frontend and Backend) acting exclusively on the client-side. The separation ensures zero merge conflicts by strictly dividing module ownership:
+Fully client-side. Two-agent parallel execution (Frontend + Backend) with strict file ownership to prevent merge conflicts.
 
-- **Backend Agent (Logic & Data Layer)**: Owns DSP processing (`dsp.ts`), Zustand state (`store.ts`), Gemini API wiring, tool calls, and the shared type contract (`types.ts`). Wrapper component: `BtoApp.tsx`.
-- **Frontend Agent (UI & Visual Layer)**: Owns React components (`Lazy Loaded`), styling (`index.css` via Tailwind/CSS Variables), framer motion animations, and overarching views. Entry wrapper: `App.tsx` (consumes `BtoApp`).
+- **Backend (Logic Layer)**: DSP (`dsp.ts`), Zustand store (`store.ts`), Gemini wiring, tool call handlers, shared type contract (`types.ts`). Wrapper: `BtoApp.tsx`.
+- **Frontend (UI Layer)**: React components (lazy-loaded), CSS variables, Framer Motion animations. Entry: `App.tsx` wrapping `BtoApp`.
 
-### State Persistence & Contracts
-- The `types.ts` acts as the definitive contract between logic and visual layers.
-- Application state is managed via Zustand but heavily restricted. Only necessary metadata (current room, audio modes, plain JSON defect arrays) is persisted to `sessionStorage`. Large objects like `Float32Array` or base64 photo payloads remain strictly ephemeral.
+State is managed via Zustand. Only serializable primitives (current room, audio mode, defect array) persist to `sessionStorage`. Blobs and `Float32Array` are ephemeral.
 
 ## Tech Stack
 
-- **Frontend**: React, TypeScript, Vite
-- **State Management**: Zustand
-- **Animations/Visuals**: React Suspense, Framer Motion, Tailwind directives with fallback Vanilla CSS variables for exact design replication.
-- **Backend/Logic**: Localized hooks bridging the Gemini Live API for audio/vision reasoning and tools. All AI queries wrap a robust `withFallback()` hook.
+- **Framework**: React 18, TypeScript, Vite
+- **State**: Zustand (sessionStorage persistence)
+- **AI**: Gemini Live API (streaming audio, vision, function calling, structured output)
+- **DSP**: Custom FFT + cosine similarity for tap classification
+- **UI**: Framer Motion, CSS variables, React Suspense for lazy loading
 
----
+## Design & UI Generation
 
-## Design & Agentic Generation
+The UI was constructed using **Stitch MCP** and **Antigravity**. Stitch MCP provided a pipeline to high-fidelity design assets -- layout configurations, structural models, and a dark industrial "construction" design system. Antigravity consumed these visual directives and translated them into production code.
 
-The entire look and feel of BTO-Sensei V2.1 was constructed using **Antigravity** and the **Stitch MCP**. 
+## Future Plans
 
-1. **Stitch MCP**: Provided a direct pipeline to the high-fidelity UI design assets, enabling extraction of precise structural models, layout configurations, and a robust design system tailored to a dark, industrial "construction" theme. 
-2. **Antigravity**: Served as the autonomous coding agent that consumed the visual directives from the Stitch MCP and translated them into the codebase. 
-
-Together, they reconstructed complex aesthetics—like the phosphor-glow terminal text, the hazard-yellow viewfinder crosshairs, the interactive spectrogram canvas, and the dynamically rendered SVG blueprint—resulting in a fully functional, pixel-perfect frontend.
+- **Vision Measurement**: Gemini Code Execution with OpenCV for reference-coin measurement of cracks and gaps
+- **Nano Banana Blueprint**: Imagen 3-generated annotated floor plan with defect markers
+- **Report Cover**: AI-generated cover page for inspection reports
+- **HDB Floor Plan Integration**: Real BTO flat type floor plans for spatial defect mapping
 
 ## Getting Started
 
-1. Clone or download the repository.
-2. Run `npm install` to install all dependencies.
-3. Add a `.env` file containing your Gemini API key:
+1. Clone the repository.
+2. `npm install`
+3. Copy `.env.example` to `.env` and add your Gemini API key:
    ```
-   REACT_APP_GEMINI_API_KEY="your_api_key_here"
+   VITE_GEMINI_API_KEY=your_key_here
    ```
-4. Start the development server using:
-   ```bash
-   npm run dev
-   ```
-5. Open `http://localhost:5173` to view the app in the browser.
+4. `npm run dev`
+5. Open `http://localhost:5173`.
 
-## Deployment Strategy
+## Deployment
 
-Given our local-first implementation, external deployment happens asynchronously. Before deploying:
-1. `npm run build` must cleanly pass.
-2. Production builds are pushed to Vercel. 
-3. Explicit configurations for `REACT_APP_GEMINI_API_KEY` must be set in Vercel's Environment Variables (with secure HTTP referrers).
+1. `npm run build` must pass.
+2. Deploy to Vercel.
+3. Set `VITE_GEMINI_API_KEY`, `VITE_GEMINI_LIVE_MODEL`, and `VITE_GEMINI_VOICE_NAME` in Vercel Environment Variables.
 
-## Built For Graceful Degradation
-BTO-Sensei operates fully client-side and includes robust fallback mechanisms to handle scenarios where network conditions degrade, ensuring inspectors can always capture and read data in offline or poor-connectivity environments. Every Gemini tool call leverages a fast (under 3 seconds) fallback payload to prevent UI hangs.
+## Graceful Degradation
+
+All Gemini calls are wrapped with `withFallback()`. If the API is unreachable, fallback responses fire within 3 seconds. No loading spinner ever hangs.

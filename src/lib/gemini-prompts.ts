@@ -39,7 +39,20 @@ export async function sendAcousticToSession(result: TapResult, room: string): Pr
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       session.sendClientContent({
-        turns: `Acoustic tap test result in ${room}: ${result.type} tile detected with ${(result.confidence * 100).toFixed(0)}% confidence. Please use report_acoustic_result to provide your assessment.`,
+        turns: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  `Acoustic tap test result in ${room}: ${result.type} tile detected with ` +
+                  `${(result.confidence * 100).toFixed(0)}% confidence. ` +
+                  "Please use report_acoustic_result to provide your assessment.",
+              },
+            ],
+          },
+        ],
+        turnComplete: true,
       });
       return true;
     } catch {
@@ -59,7 +72,19 @@ export async function sendVisionToSession(room: string, defectDescription: strin
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       session.sendClientContent({
-        turns: `Visual inspection in ${room}: ${defectDescription}. Please use log_defect to record this finding.`,
+        turns: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  `A visual defect has already been logged in ${room}: ${defectDescription}. ` +
+                  "Acknowledge it in Singlish for the homeowner and do not call any tools.",
+              },
+            ],
+          },
+        ],
+        turnComplete: true,
       });
       return true;
     } catch {

@@ -89,7 +89,7 @@ function AppContent() {
                     {/* System status */}
                     <div className="system-status font-mono phosphor-glow">
                       <p>&gt; BOOTING HDB_CONSTRUCTION_HUD...</p>
-                      <p>&gt; LOADING AH_SENG_AI_V2.1... [SUCCESS]</p>
+                      <p>&gt; LOADING AH_SENG_AI_V0.1... [SUCCESS]</p>
                       <p>&gt; MIC_INPUT: CALIBRATED (BTO SITE 14)</p>
                     </div>
 

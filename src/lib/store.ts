@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { FALLBACKS, withRetryAndFallback } from "./fallback";
+import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "./fallback";
 import { deriveBlueprintCoords, generateInspectionReport } from "./gemini-report";
 import type {
   AsyncState,
@@ -107,7 +107,8 @@ export const useBTOStore = create<BTOStore>()(
             return generateInspectionReport(defects, flatId, inspectionDate);
           },
           FALLBACKS.report(flatId, defects),
-          8000,
+          15000,
+          GEMINI_RATE_LIMIT_RETRY,
         );
 
         set({
@@ -146,6 +147,9 @@ export const useBTOStore = create<BTOStore>()(
             [mode]: enabled,
           },
         })),
+      apiKeyVersion: 0,
+      bumpApiKeyVersion: () =>
+        set((state) => ({ apiKeyVersion: state.apiKeyVersion + 1 })),
     }),
     {
       name: "bto-store",
