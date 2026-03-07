@@ -1,4 +1,5 @@
 import { getGeminiClient } from "../hooks/use-bto-config";
+import { ROOM_CENTERS } from "./room-geometry";
 import type {
   BlueprintCoord,
   Defect,
@@ -147,15 +148,7 @@ Return ONLY valid JSON, no markdown fences.`;
   };
 }
 
-const ROOM_CENTERS: Record<RoomName, { x: number; y: number }> = {
-  "Living Room": { x: 210, y: 210 },
-  Kitchen: { x: 360, y: 145 },
-  "Master Bedroom": { x: 360, y: 320 },
-  "Common Bedroom": { x: 150, y: 95 },
-  "Master Bathroom": { x: 425, y: 390 },
-  "Common Bathroom": { x: 275, y: 390 },
-  Balcony: { x: 95, y: 285 },
-};
+// ROOM_CENTERS is imported from ../components/bto/FloorPlanSVG to stay synced with geometry
 
 export function deriveBlueprintCoords(defects: Defect[]): BlueprintCoord[] {
   return defects.map((defect, index) => {
