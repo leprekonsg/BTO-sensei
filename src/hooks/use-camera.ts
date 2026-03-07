@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, ThinkingLevel } from "@google/genai";
 import { getGeminiClient } from "./use-bto-config";
 import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "../lib/fallback";
 import {
@@ -15,6 +16,8 @@ import { useBTOStore } from "../lib/store";
 import type { Defect, Measurement, Severity, UseCameraReturn } from "../lib/types";
 
 const VISION_MODEL = "gemini-3-flash-preview";
+const AGENTIC_TIMEOUT_MS = 12000;
+const AGENTIC_MEASURE_TIMEOUT_MS = 20000;
 
 const CONQUAS_SEVERITY_PROMPT = `SEVERITY CLASSIFICATION (BCA CONQUAS):
 - Critical: Water seepage/leakage, broken glass, structural cracks >0.3mm or >300mm,
@@ -33,6 +36,19 @@ interface VisionResponse extends VisionLikeResponse {
   confidence: number;
   bbox?: [number, number, number, number] | null;
   measurement?: Measurement;
+}
+
+function toAgenticErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.status ? `Gemini API ${error.status}: ${error.message}` : error.message;
+  }
+  if (error instanceof SyntaxError) {
+    return `Agentic vision returned invalid JSON: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Unknown agentic vision failure.";
 }
 
 /** Second-pass agentic verification with code execution for ambiguous defects. */
@@ -97,7 +113,7 @@ Return ONLY valid JSON:
       ],
       config: {
         tools: [{ codeExecution: {} }],
-        thinkingConfig: { thinkingBudget: 512 },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         responseMimeType: "text/plain",
       },
     });
@@ -117,8 +133,8 @@ Return ONLY valid JSON:
     const jsonMatch = lastText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, lastText];
     const cleaned = (jsonMatch[1] ?? lastText).trim();
     return JSON.parse(cleaned) as Partial<VisionResponse>;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new Error(toAgenticErrorMessage(error));
   }
 }
 
@@ -393,7 +409,10 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
           const agenticResult = await Promise.race([
             triggerAgenticPass(agenticContext.base64Data, agenticContext.mimeType, baseResult, currentRoom, measureMode),
             new Promise<null>((resolve) => {
-              window.setTimeout(() => resolve(null), 10000);
+              window.setTimeout(
+                () => resolve(null),
+                measureMode ? AGENTIC_MEASURE_TIMEOUT_MS : AGENTIC_TIMEOUT_MS,
+              );
             }),
           ]);
 
