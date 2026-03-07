@@ -1,21 +1,87 @@
-export interface FunctionDeclaration {
-  name: string;
-  description: string;
-}
+import { Type } from "@google/genai";
+import type { FunctionDeclaration } from "@google/genai";
 
 export const reportAcousticDeclaration: FunctionDeclaration = {
   name: "report_acoustic_result",
-  description: "Narrate acoustic classification in Ah Seng voice.",
+  description:
+    "Report an acoustic tile tap test result to the user. Called after DSP analysis classifies a tap as hollow or solid.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      tile_type: {
+        type: Type.STRING,
+        enum: ["hollow", "solid"],
+        description: "Classification result from the DSP pipeline.",
+      },
+      confidence: {
+        type: Type.NUMBER,
+        description: "Classification confidence between 0 and 1.",
+      },
+      commentary: {
+        type: Type.STRING,
+        description:
+          "Ah Seng's assessment of the result in Singlish. Keep it short and practical.",
+      },
+    },
+    required: ["tile_type", "confidence", "commentary"],
+  },
 };
 
 export const logDefectDeclaration: FunctionDeclaration = {
   name: "log_defect",
-  description: "Log a defect with room, severity, and recommendation.",
+  description:
+    "Log a defect found during BTO flat inspection. Called when visual or acoustic evidence confirms a defect.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      room: {
+        type: Type.STRING,
+        description: "Room where the defect was found.",
+      },
+      defect_type: {
+        type: Type.STRING,
+        description: "Type of defect, e.g. 'Hollow tile', 'Wall crack', 'Water stain'.",
+      },
+      severity: {
+        type: Type.STRING,
+        enum: ["Minor", "Moderate", "Critical"],
+        description: "Severity assessment.",
+      },
+      description: {
+        type: Type.STRING,
+        description: "Brief description of the defect.",
+      },
+      recommendation: {
+        type: Type.STRING,
+        description: "Recommended action for the homeowner.",
+      },
+      confidence: {
+        type: Type.NUMBER,
+        description: "Confidence score between 0 and 1.",
+      },
+    },
+    required: ["room", "defect_type", "severity", "description", "recommendation", "confidence"],
+  },
 };
 
 export const generateReportDeclaration: FunctionDeclaration = {
   name: "generate_report",
-  description: "Generate an inspection report from logged evidence.",
+  description:
+    "Generate a comprehensive inspection report for the BTO flat. Called when the user requests a summary.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      flat_id: {
+        type: Type.STRING,
+        description: "The BTO flat unit identifier.",
+      },
+      inspection_date: {
+        type: Type.STRING,
+        description: "Date of inspection in YYYY-MM-DD format.",
+      },
+    },
+    required: ["flat_id", "inspection_date"],
+  },
 };
 
 export const geminiToolDeclarations = [

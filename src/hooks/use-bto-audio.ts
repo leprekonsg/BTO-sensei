@@ -1,9 +1,11 @@
-import { loadBaselineProfile, loadTapSample } from "../lib/audio-samples";
-import { audioBufferToFrequencyProfile, classifyTap } from "../lib/dsp";
+import { loadTapSample, recordMicTap } from "../lib/audio-samples";
+import { analyzeAudioBuffer, classifyTap, downsampleForDisplay } from "../lib/dsp";
 import { FALLBACKS, withFallback } from "../lib/fallback";
-import { buildAcousticCommentary } from "../lib/gemini-prompts";
+import { buildAcousticCommentary, sendAcousticToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
 import type { TapResult, UseBTOAudioReturn } from "../lib/types";
+
+const DEFAULT_SAMPLE_RATE = 44100;
 
 export function useBTOAudio(): UseBTOAudioReturn {
   const audioMode = useBTOStore((state) => state.audioMode);
@@ -14,6 +16,7 @@ export function useBTOAudio(): UseBTOAudioReturn {
   const setFrequencyData = useBTOStore((state) => state.setFrequencyData);
   const failureModes = useBTOStore((state) => state.failureModes);
   const setInspectorMessage = useBTOStore((state) => state.setInspectorMessage);
+  const currentRoom = useBTOStore((state) => state.currentRoom);
 
   async function analyzeTap(
     source: "prerecorded-hollow" | "prerecorded-solid" | AudioBuffer,
@@ -29,20 +32,26 @@ export function useBTOAudio(): UseBTOAudioReturn {
 
     const result = await withFallback<TapResult>(
       async () => {
-        const [hollowBaseline, solidBaseline, tapProfile] = await Promise.all([
-          loadBaselineProfile("hollow"),
-          loadBaselineProfile("solid"),
-          source instanceof AudioBuffer
-            ? Promise.resolve(audioBufferToFrequencyProfile(source))
-            : loadTapSample(source),
-        ]);
-
         if (failureModes.audio) {
           throw new Error("Simulated acoustic pipeline failure.");
         }
 
-        setFrequencyData(tapProfile);
-        const classified = classifyTap(tapProfile, hollowBaseline, solidBaseline);
+        // Get the AudioBuffer -- either from prerecorded file or passed directly
+        let audioBuffer: AudioBuffer;
+        if (source instanceof AudioBuffer) {
+          audioBuffer = source;
+        } else {
+          audioBuffer = await loadTapSample(source);
+        }
+
+        // Run real FFT analysis via Web Audio AnalyserNode
+        const freqData = await analyzeAudioBuffer(audioBuffer);
+        const displayData = downsampleForDisplay(freqData, 64);
+        setFrequencyData(displayData);
+
+        // Multi-band energy ratio classification with Z-score normalization
+        const sampleRate = audioBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
+        const classified = classifyTap(freqData, sampleRate);
         return {
           ...classified,
           commentary: buildAcousticCommentary(classified, false),
@@ -51,13 +60,47 @@ export function useBTOAudio(): UseBTOAudioReturn {
       fallback,
     );
 
-    if (result.isFallback && !frequencyData) {
-      setFrequencyData(
-        source === "prerecorded-solid"
-          ? await loadTapSample("prerecorded-solid")
-          : await loadTapSample("prerecorded-hollow"),
-      );
+    setLastTapResult({
+      data: result.data,
+      loading: false,
+      error: result.error,
+    });
+    setInspectorMessage(buildAcousticCommentary(result.data, result.isFallback));
+
+    // Send result to Live API session for Ah Seng commentary
+    if (!result.isFallback) {
+      sendAcousticToSession(result.data, currentRoom);
     }
+  }
+
+  async function analyzeLiveMic() {
+    setLastTapResult({
+      data: lastTapResult.data,
+      loading: true,
+      error: null,
+    });
+
+    const result = await withFallback<TapResult>(
+      async () => {
+        if (failureModes.audio) {
+          throw new Error("Simulated acoustic pipeline failure.");
+        }
+
+        const audioBuffer = await recordMicTap(1000);
+        const freqData = await analyzeAudioBuffer(audioBuffer);
+        const displayData = downsampleForDisplay(freqData, 64);
+        setFrequencyData(displayData);
+
+        const sampleRate = audioBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
+        const classified = classifyTap(freqData, sampleRate);
+        return {
+          ...classified,
+          commentary: buildAcousticCommentary(classified, false),
+        };
+      },
+      FALLBACKS.acoustic.hollow,
+      5000, // longer timeout for mic recording
+    );
 
     setLastTapResult({
       data: result.data,
@@ -65,10 +108,16 @@ export function useBTOAudio(): UseBTOAudioReturn {
       error: result.error,
     });
     setInspectorMessage(buildAcousticCommentary(result.data, result.isFallback));
+
+    // Send result to Live API session for Ah Seng commentary
+    if (!result.isFallback) {
+      sendAcousticToSession(result.data, currentRoom);
+    }
   }
 
   return {
     analyzeTap,
+    analyzeLiveMic,
     frequencyData,
     lastTapResult,
     audioMode,

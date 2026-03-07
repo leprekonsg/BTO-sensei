@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { FALLBACKS, withFallback } from "./fallback";
+import { FALLBACKS, withRetryAndFallback } from "./fallback";
 import { deriveBlueprintCoords, generateInspectionReport } from "./gemini-report";
 import type {
   AsyncState,
@@ -98,7 +98,7 @@ export const useBTOStore = create<BTOStore>()(
           },
         }));
 
-        const result = await withFallback(
+        const result = await withRetryAndFallback(
           async () => {
             if (get().failureModes.report) {
               throw new Error("Simulated report service outage.");
@@ -107,6 +107,7 @@ export const useBTOStore = create<BTOStore>()(
             return generateInspectionReport(defects, flatId, inspectionDate);
           },
           FALLBACKS.report(flatId, defects),
+          8000,
         );
 
         set({

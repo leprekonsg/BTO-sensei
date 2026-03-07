@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useState } from "react";
 import { BtoApp } from "./BtoApp";
 import { Layout, type ViewTab } from "./components/bto/Layout";
 import { RoomNavigator } from "./components/bto/RoomNavigator";
@@ -66,18 +66,14 @@ function AppContent() {
   const { frequencyData, lastTapResult } = useBTOAudio();
   const inspectorMessage = useBTOStore((s) => s.inspectorMessage);
   const defects = useBTOStore((s) => s.defects);
-  const prevDefectCount = useRef(defects.length);
   const [showStamp, setShowStamp] = useState(false);
-
-  useEffect(() => {
-    if (defects.length > prevDefectCount.current) {
-      prevDefectCount.current = defects.length;
-      setShowStamp(true);
-      return;
-    }
-
-    prevDefectCount.current = defects.length;
-  }, [defects.length]);
+  const [prevDefectCount, setPrevDefectCount] = useState(defects.length);
+  if (defects.length > prevDefectCount) {
+    setPrevDefectCount(defects.length);
+    if (!showStamp) setShowStamp(true);
+  } else if (defects.length !== prevDefectCount) {
+    setPrevDefectCount(defects.length);
+  }
 
   const handleStampDone = useCallback(() => setShowStamp(false), []);
 

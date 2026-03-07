@@ -2,7 +2,7 @@ import { useBTOAudio } from "../../hooks/use-bto-audio";
 import "./AudioCapture.css";
 
 export function AudioCapture() {
-  const { analyzeTap, audioMode, lastTapResult, setAudioMode } = useBTOAudio();
+  const { analyzeTap, analyzeLiveMic, audioMode, lastTapResult, setAudioMode } = useBTOAudio();
 
   return (
     <div className="audio-capture">
@@ -49,10 +49,12 @@ export function AudioCapture() {
           </button>
           <button
             className="tap-btn tap-btn--secondary"
-            disabled
+            onClick={() => analyzeLiveMic()}
+            disabled={lastTapResult.loading || audioMode !== "live-mic"}
+            data-testid="tap-live-mic"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>history</span>
-            Logs
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>mic</span>
+            Record Tap
           </button>
         </div>
       </div>

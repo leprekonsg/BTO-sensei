@@ -14,6 +14,54 @@ export interface FallbackOutcome<T> {
   isFallback: boolean;
 }
 
+export interface RetryConfig {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  shouldRetry?: (error: unknown) => boolean;
+}
+
+const DEFAULT_RETRY: RetryConfig = {
+  maxAttempts: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 4000,
+  shouldRetry: isRetryable,
+};
+
+export function isRetryable(error: unknown): boolean {
+  if (!(error instanceof Error)) return true;
+  const msg = error.message.toLowerCase();
+  if (msg.includes("api key") || msg.includes("invalid") || msg.includes("simulated")) return false;
+  return true;
+}
+
+function backoffDelay(attempt: number, config: RetryConfig): number {
+  const delay = config.baseDelayMs * Math.pow(2, attempt);
+  const jitter = delay * 0.25 * (Math.random() * 2 - 1);
+  return Math.min(delay + jitter, config.maxDelayMs);
+}
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  config: Partial<RetryConfig> = {},
+): Promise<T> {
+  const cfg = { ...DEFAULT_RETRY, ...config };
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < cfg.maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < cfg.maxAttempts - 1 && cfg.shouldRetry!(error)) {
+        await new Promise((r) => setTimeout(r, backoffDelay(attempt, cfg)));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export async function withFallback<T>(
   fn: () => Promise<T>,
   fallback: T,
@@ -40,6 +88,15 @@ export async function withFallback<T>(
       isFallback: true,
     };
   }
+}
+
+export async function withRetryAndFallback<T>(
+  fn: () => Promise<T>,
+  fallback: T,
+  timeoutMs = 8000,
+  retry: Partial<RetryConfig> = {},
+): Promise<FallbackOutcome<T>> {
+  return withFallback(() => withRetry(fn, retry), fallback, timeoutMs);
 }
 
 export const FALLBACKS = {

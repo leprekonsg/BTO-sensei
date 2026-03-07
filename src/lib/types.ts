@@ -90,6 +90,7 @@ export interface UseBTOAudioReturn {
   analyzeTap: (
     source: "prerecorded-hollow" | "prerecorded-solid" | AudioBuffer,
   ) => Promise<void>;
+  analyzeLiveMic: () => Promise<void>;
   frequencyData: Float32Array | null;
   lastTapResult: AsyncState<TapResult>;
   audioMode: AudioMode;

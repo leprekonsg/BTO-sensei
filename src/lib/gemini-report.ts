@@ -1,3 +1,4 @@
+import { getGeminiClient } from "../hooks/use-bto-config";
 import type {
   BlueprintCoord,
   Defect,
@@ -8,9 +9,7 @@ import type {
 } from "./types";
 import { ROOMS } from "./types";
 
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+const REPORT_MODEL = "gemini-3-flash-preview";
 
 function severityPenalty(severity: Severity) {
   switch (severity) {
@@ -24,27 +23,17 @@ function severityPenalty(severity: Severity) {
 }
 
 function roomSummary(room: string, defects: Defect[]) {
-  if (!defects.length) {
-    return `${room} looks clear.`;
-  }
-
+  if (!defects.length) return `${room} looks clear.`;
   const topSeverity = defects
-    .map((defect) => defect.severity)
-    .sort((left, right) => severityPenalty(right) - severityPenalty(left))[0];
-
+    .map((d) => d.severity)
+    .sort((a, b) => severityPenalty(b) - severityPenalty(a))[0];
   return `${defects.length} issue${defects.length > 1 ? "s" : ""} logged, highest severity ${topSeverity.toLowerCase()}.`;
 }
 
-async function buildRoomScores(defects: Defect[]): Promise<RoomScore[]> {
-  await delay(120);
-
+function localRoomScores(defects: Defect[]): RoomScore[] {
   return ROOMS.map((room) => {
-    const roomDefects = defects.filter((defect) => defect.room === room);
-    const penalty = roomDefects.reduce(
-      (total, defect) => total + severityPenalty(defect.severity),
-      0,
-    );
-
+    const roomDefects = defects.filter((d) => d.room === room);
+    const penalty = roomDefects.reduce((t, d) => t + severityPenalty(d.severity), 0);
     return {
       room,
       score: Math.max(45, 100 - penalty),
@@ -53,44 +42,108 @@ async function buildRoomScores(defects: Defect[]): Promise<RoomScore[]> {
   });
 }
 
-async function buildPriorityDefects(defects: Defect[]): Promise<Defect[]> {
-  await delay(90);
-
+function localPriorityDefects(defects: Defect[]): Defect[] {
   return [...defects]
-    .sort((left: Defect, right: Defect) => {
-      const severityGap =
-        severityPenalty(right.severity) - severityPenalty(left.severity);
-      if (severityGap !== 0) {
-        return severityGap;
-      }
-
-      return right.timestamp - left.timestamp;
+    .sort((a, b) => {
+      const gap = severityPenalty(b.severity) - severityPenalty(a.severity);
+      return gap !== 0 ? gap : b.timestamp - a.timestamp;
     })
     .slice(0, 5);
 }
 
+/** Local fallback report generation (no AI dependency) */
+export function generateLocalReport(
+  defects: Defect[],
+  flatId: string,
+  inspectionDate: string,
+): InspectionReport {
+  const roomScores = localRoomScores(defects);
+  const avg = roomScores.reduce((t, r) => t + r.score, 0) / roomScores.length;
+
+  return {
+    flat_id: flatId.trim() || "BTO-UNKNOWN",
+    inspection_date: inspectionDate,
+    overall_health_score: Math.round(avg),
+    room_scores: roomScores,
+    priority_defects: localPriorityDefects(defects),
+    inspector_note: defects.length
+      ? "Most issues are serviceable within the defect liability window. Clear the critical items first."
+      : "No significant defects logged yet. Continue inspecting room by room.",
+  };
+}
+
+/** Generate an inspection report using Gemini with structured output */
 export async function generateInspectionReport(
   defects: Defect[],
   flatId: string,
   inspectionDate: string,
 ): Promise<InspectionReport> {
-  const [roomScores, priorityDefects] = await Promise.all([
-    buildRoomScores(defects),
-    buildPriorityDefects(defects),
-  ]);
+  const client = getGeminiClient();
+  if (!client) {
+    return generateLocalReport(defects, flatId, inspectionDate);
+  }
 
-  const average =
-    roomScores.reduce((total, room) => total + room.score, 0) / roomScores.length;
+  const defectSummary = defects.map((d, i) => (
+    `${i + 1}. [${d.room}] ${d.defect_type} (${d.severity}) - ${d.description}`
+  )).join("\n");
+
+  const prompt = `You are Ah Seng, a veteran BTO flat inspector in Singapore. Generate a structured inspection report.
+
+Flat ID: ${flatId}
+Inspection Date: ${inspectionDate}
+Total Defects Found: ${defects.length}
+
+Defect Log:
+${defectSummary || "No defects logged."}
+
+Based on the defects, generate a JSON report with this exact structure:
+{
+  "flat_id": "${flatId}",
+  "inspection_date": "${inspectionDate}",
+  "overall_health_score": <number 0-100>,
+  "room_scores": [
+    { "room": "<room name>", "score": <number 0-100>, "summary": "<brief assessment>" }
+  ],
+  "priority_defects": [<top 5 defect objects from the log, keeping all fields>],
+  "inspector_note": "<Ah Seng's overall assessment in Singlish, practical and direct>"
+}
+
+Rules:
+- Score rooms based on HDB defect liability standards
+- Critical defects drop room score by 20-25 points
+- Moderate defects drop by 10-15 points
+- Minor defects drop by 5-8 points
+- Rooms with no defects score 90-100
+- Overall score is weighted average of room scores
+- Inspector note should be in Singlish, practical, and mention the most important items
+- Include ALL rooms from: ${ROOMS.join(", ")}
+
+Return ONLY valid JSON, no markdown fences.`;
+
+  const response = await client.models.generateContent({
+    model: REPORT_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  const text = response.text?.trim();
+  if (!text) throw new Error("Empty response from Gemini");
+
+  const parsed = JSON.parse(text) as InspectionReport;
+
+  if (typeof parsed.overall_health_score !== "number" || !Array.isArray(parsed.room_scores)) {
+    throw new Error("Invalid report structure from Gemini");
+  }
 
   return {
-    flat_id: flatId.trim() || "BTO-UNKNOWN",
-    inspection_date: inspectionDate,
-    overall_health_score: Math.round(average),
-    room_scores: roomScores,
-    priority_defects: priorityDefects,
-    inspector_note: defects.length
-      ? "Most issues are serviceable within the defect liability window. Clear the critical items first."
-      : "No significant defects logged yet. Continue inspecting room by room.",
+    flat_id: parsed.flat_id || flatId,
+    inspection_date: parsed.inspection_date || inspectionDate,
+    overall_health_score: parsed.overall_health_score,
+    room_scores: parsed.room_scores,
+    priority_defects: parsed.priority_defects || localPriorityDefects(defects),
+    inspector_note: parsed.inspector_note || "Report generated by AI.",
   };
 }
 

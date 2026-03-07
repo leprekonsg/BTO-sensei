@@ -83,8 +83,8 @@ export function Spectrogram({ values }: SpectrogramProps) {
 
       {/* HUD overlays */}
       <div className="spectrogram-hud-left font-mono phosphor-glow">
-        <span>DB LEVEL: {values ? (60 + Math.random() * 30).toFixed(1) : "--.-"}</span>
-        <span>FREQ: {values ? (8 + Math.random() * 10).toFixed(1) + " KHZ" : "--.- KHZ"}</span>
+        <span>DB LEVEL: {values ? (60 + (values[0] ?? 0) * 30).toFixed(1) : "--.-"}</span>
+        <span>FREQ: {values ? (8 + (values[1] ?? 0) * 10).toFixed(1) + " KHZ" : "--.- KHZ"}</span>
       </div>
       {values && (
         <div className="spectrogram-hud-badge">
