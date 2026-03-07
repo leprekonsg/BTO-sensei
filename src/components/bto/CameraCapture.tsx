@@ -36,6 +36,11 @@ export function CameraCapture() {
 
   async function handleAnalyze() {
     setWorking(true);
+    console.debug("[camera:analyze]", {
+      hasPreview: Boolean(cameraPreview),
+      measureMode,
+      prompt,
+    });
     try { await sendToVision(cameraPreview ?? "", prompt, measureMode); } finally { setWorking(false); }
   }
 
@@ -155,6 +160,13 @@ export function CameraCapture() {
         <div className="viewfinder-controls">
           {captured ? (
             <>
+              <button
+                className={`vf-btn ${measureMode ? "vf-btn--active" : ""}`}
+                onClick={() => setMeasureMode(!measureMode)}
+                title="Toggle measurement mode for this captured photo"
+              >
+                <span className="material-symbols-outlined">straighten</span>
+              </button>
               <button className="vf-btn" onClick={handleRetake} title="Retake photo">
                 <span className="material-symbols-outlined">replay</span>
               </button>
@@ -193,7 +205,11 @@ export function CameraCapture() {
       {measureMode && (
         <div className="measure-hint">
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>straighten</span>
-          <span className="font-mono">MEASURE MODE: Place a SG 50-cent coin next to the defect as size reference</span>
+          <span className="font-mono">
+            {captured
+              ? "MEASURE MODE ACTIVE: This photo will run coin-referenced measurement during analysis"
+              : "MEASURE MODE: Place a SG 50-cent coin next to the defect as size reference"}
+          </span>
         </div>
       )}
 

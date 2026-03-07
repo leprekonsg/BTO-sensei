@@ -5,11 +5,15 @@ import { buildAhSengPrompt } from "../lib/gemini-prompts";
 import { geminiToolDeclarations } from "../lib/gemini-functions";
 import { resetPlaybackQueue, playInlineAudio } from "../lib/live-audio";
 import { GEMINI_RATE_LIMIT_RETRY, withRetry } from "../lib/fallback";
+import { buildModelCandidates, shouldTryModelFallback } from "../lib/gemini-models";
 import { useBTOStore } from "../lib/store";
 
-const LIVE_MODEL =
-  (import.meta.env?.VITE_GEMINI_LIVE_MODEL as string | undefined) ||
-  "gemini-2.5-flash-native-audio-preview-12-2025";
+const LIVE_MODEL_CANDIDATES = buildModelCandidates(
+  import.meta.env?.VITE_GEMINI_LIVE_MODELS as string | undefined,
+  import.meta.env?.VITE_GEMINI_LIVE_MODEL as string | undefined,
+  "gemini-2.5-flash-native-audio-preview-12-2025",
+  "gemini-2.5-flash-native-audio-preview-09-2025",
+);
 const LIVE_VOICE =
   (import.meta.env?.VITE_GEMINI_VOICE_NAME as string | undefined) || "Kore";
 
@@ -62,6 +66,51 @@ export function getActiveSession(): Session | null {
   return activeSession;
 }
 
+function detectLiveResponseMode(model: string) {
+  return model.includes("native-audio") ? Modality.AUDIO : Modality.TEXT;
+}
+
+function buildLiveConnectConfig(model: string, prompt: string) {
+  const responseModality = detectLiveResponseMode(model);
+  const baseConfig = {
+    responseModalities: [responseModality],
+    systemInstruction: prompt,
+    tools: [
+      {
+        functionDeclarations: geminiToolDeclarations as FunctionDeclaration[],
+      },
+    ],
+  };
+
+  if (responseModality === Modality.AUDIO) {
+    return {
+      ...baseConfig,
+      outputAudioTranscription: {},
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: LIVE_VOICE,
+          },
+        },
+      },
+    };
+  }
+
+  return baseConfig;
+}
+
+function logLiveInfo(stage: "connect-start" | "connect-success" | "model-fallback", details: Record<string, unknown>) {
+  console.debug(`[live:${stage}]`, details);
+}
+
+function logLiveFailure(details: Record<string, unknown>) {
+  console.groupCollapsed("[live:connect] failure");
+  for (const [key, value] of Object.entries(details)) {
+    console.error(key, value);
+  }
+  console.groupEnd();
+}
+
 export function useBTOConfig() {
   const currentRoom = useBTOStore((state) => state.currentRoom);
   const apiKeyVersion = useBTOStore((state) => state.apiKeyVersion);
@@ -96,91 +145,114 @@ export function useBTOConfig() {
 
     async function connect() {
       try {
-        const connectedSession = await withRetry(
-          () =>
-            liveClient.live.connect({
-              model: LIVE_MODEL,
-              config: {
-                responseModalities: [Modality.AUDIO],
-                systemInstruction: prompt,
-                outputAudioTranscription: {},
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: LIVE_VOICE,
+        let connectedSession: Session | null = null;
+
+        for (const [index, model] of LIVE_MODEL_CANDIDATES.entries()) {
+          try {
+            logLiveInfo("connect-start", {
+              model,
+              responseModality: detectLiveResponseMode(model),
+              fallbackIndex: index,
+              candidates: LIVE_MODEL_CANDIDATES,
+            });
+
+            connectedSession = await withRetry(
+              () =>
+                liveClient.live.connect({
+                  model,
+                  config: buildLiveConnectConfig(model, prompt),
+                  callbacks: {
+                    onopen: () => {
+                      if (!active) return;
+                      setSessionState(true, null);
+                      setSessionTools(geminiToolDeclarations.map((tool) => tool.name!));
                     },
-                  },
-                },
-                tools: [
-                  {
-                    functionDeclarations: geminiToolDeclarations as FunctionDeclaration[],
-                  },
-                ],
-              },
-              callbacks: {
-                onopen: () => {
-                  if (!active) return;
-                  setSessionState(true, null);
-                  setSessionTools(geminiToolDeclarations.map((tool) => tool.name!));
-                },
-                onmessage: (message: unknown) => {
-                  if (!active) return;
-                  const msg = message as Record<string, unknown>;
+                    onmessage: (message: unknown) => {
+                      if (!active) return;
+                      const msg = message as Record<string, unknown>;
 
-                  if (msg.toolCall) {
-                    onToolCallRef.current?.(msg);
-                  }
+                      if (msg.toolCall) {
+                        onToolCallRef.current?.(msg);
+                      }
 
-                  const sc = msg.serverContent as Record<string, unknown> | undefined;
-                  const transcription = sc?.outputTranscription as { text?: string } | undefined;
-                  if (transcription?.text) {
-                    setInspectorMessage(transcription.text);
-                  }
+                      const sc = msg.serverContent as Record<string, unknown> | undefined;
+                      const transcription = sc?.outputTranscription as { text?: string } | undefined;
+                      if (transcription?.text) {
+                        setInspectorMessage(transcription.text);
+                      }
 
-                  if (sc?.modelTurn) {
-                    const mt = sc.modelTurn as Content;
-                    if (mt.parts) {
-                      for (const part of mt.parts) {
-                        if (part.text && !transcription?.text) {
-                          setInspectorMessage(part.text);
-                        }
+                      if (sc?.modelTurn) {
+                        const mt = sc.modelTurn as Content;
+                        if (mt.parts) {
+                          for (const part of mt.parts) {
+                            if (part.text && !transcription?.text) {
+                              setInspectorMessage(part.text);
+                            }
 
-                        if (
-                          part.inlineData?.data &&
-                          typeof part.inlineData.data === "string"
-                        ) {
-                          const mimeType = part.inlineData.mimeType || "audio/pcm;rate=24000";
-                          void playInlineAudio(part.inlineData.data, mimeType).catch(() => {
-                            if (!active) return;
-                            setInspectorMessage(
-                              "Audio reply came back, but playback failed. Read the transcript instead.",
-                            );
-                          });
+                            if (
+                              part.inlineData?.data &&
+                              typeof part.inlineData.data === "string"
+                            ) {
+                              const mimeType = part.inlineData.mimeType || "audio/pcm;rate=24000";
+                              void playInlineAudio(part.inlineData.data, mimeType).catch(() => {
+                                if (!active) return;
+                                setInspectorMessage(
+                                  "Audio reply came back, but playback failed. Read the transcript instead.",
+                                );
+                              });
+                            }
+                          }
                         }
                       }
-                    }
-                  }
 
-                  if (sc?.interrupted) {
-                    resetPlaybackQueue();
-                  }
-                },
-                onerror: (error: { message?: string }) => {
-                  if (!active) return;
-                  setSessionState(false, error.message || "Live API connection error");
-                },
-                onclose: () => {
-                  if (!active) return;
-                  activeSession = null;
-                  sessionRef.current = null;
-                  resetPlaybackQueue();
-                  setSessionState(false, "Session closed");
-                },
-              },
-            },
-          ),
-          GEMINI_RATE_LIMIT_RETRY,
-        );
+                      if (sc?.interrupted) {
+                        resetPlaybackQueue();
+                      }
+                    },
+                    onerror: (error: { message?: string }) => {
+                      if (!active) return;
+                      setSessionState(false, error.message || "Live API connection error");
+                    },
+                    onclose: () => {
+                      if (!active) return;
+                      activeSession = null;
+                      sessionRef.current = null;
+                      resetPlaybackQueue();
+                      setSessionState(false, "Session closed");
+                    },
+                  },
+                }),
+              GEMINI_RATE_LIMIT_RETRY,
+            );
+
+            logLiveInfo("connect-success", {
+              model,
+              responseModality: detectLiveResponseMode(model),
+            });
+            break;
+          } catch (error) {
+            logLiveFailure({
+              model,
+              responseModality: detectLiveResponseMode(model),
+              error,
+            });
+
+            const nextModel = LIVE_MODEL_CANDIDATES[index + 1];
+            if (nextModel && shouldTryModelFallback(error)) {
+              logLiveInfo("model-fallback", {
+                fromModel: model,
+                toModel: nextModel,
+              });
+              continue;
+            }
+
+            throw error;
+          }
+        }
+
+        if (!connectedSession) {
+          throw new Error("Failed to connect to any configured Gemini Live model.");
+        }
         if (!active) {
           connectedSession.close();
           return;

@@ -61,12 +61,11 @@ export function ApiKeyConfig() {
         </p>
       )}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type={revealed ? "text" : "password"}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
           placeholder="AIza..."
           autoComplete="off"
           spellCheck={false}
@@ -99,8 +98,7 @@ export function ApiKeyConfig() {
           {revealed ? "HIDE" : "SHOW"}
         </button>
         <button
-          type="button"
-          onClick={handleSave}
+          type="submit"
           className="font-mono"
           disabled={!input.trim()}
           style={{
@@ -135,7 +133,7 @@ export function ApiKeyConfig() {
             CLEAR
           </button>
         )}
-      </div>
+      </form>
 
       {showError && (
         <p

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, ThinkingLevel } from "@google/genai";
 import { getGeminiClient } from "./use-bto-config";
-import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "../lib/fallback";
+import { FALLBACKS, GEMINI_VISION_RETRY, withRetryAndFallback } from "../lib/fallback";
 import {
   buildInvalidSeverityRationale,
   clampBBox,
@@ -11,11 +11,22 @@ import {
   validateSeverity,
   type VisionLikeResponse,
 } from "../lib/defect-utils";
+import { buildModelCandidates, shouldTryModelFallback } from "../lib/gemini-models";
 import { sendVisionToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
 import type { Defect, Measurement, Severity, UseCameraReturn } from "../lib/types";
 
-const VISION_MODEL = "gemini-3-flash-preview";
+const FAST_VISION_MODELS = buildModelCandidates(
+  import.meta.env?.VITE_GEMINI_FAST_VISION_MODELS as string | undefined,
+  import.meta.env?.VITE_GEMINI_FAST_VISION_MODEL as string | undefined,
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+);
+const AGENTIC_VISION_MODEL =
+  (import.meta.env?.VITE_GEMINI_AGENTIC_VISION_MODEL as string | undefined) ||
+  "gemini-3-flash-preview";
+const VISION_TIMEOUT_MS = 25000;
+const MEASURE_VISION_TIMEOUT_MS = 45000;
 const AGENTIC_TIMEOUT_MS = 12000;
 const AGENTIC_MEASURE_TIMEOUT_MS = 20000;
 
@@ -38,6 +49,48 @@ interface VisionResponse extends VisionLikeResponse {
   measurement?: Measurement;
 }
 
+function toLoggableError(error: unknown) {
+  if (error instanceof ApiError) {
+    return {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      stack: error.stack,
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return { message: String(error) };
+}
+
+function logVisionFailure(
+  stage: "fast-pass" | "agentic-pass" | "vision-fallback",
+  details: Record<string, unknown>,
+) {
+  console.groupCollapsed(`[vision:${stage}] failure`);
+  for (const [key, value] of Object.entries(details)) {
+    console.error(key, value);
+  }
+  console.groupEnd();
+}
+
+function logVisionInfo(
+  stage:
+    | "fast-pass-start"
+    | "fast-pass-success"
+    | "agentic-pass-start"
+    | "agentic-pass-success"
+    | "model-fallback",
+  details: Record<string, unknown>,
+) {
+  console.debug(`[vision:${stage}]`, details);
+}
+
 function toAgenticErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.status ? `Gemini API ${error.status}: ${error.message}` : error.message;
@@ -51,6 +104,75 @@ function toAgenticErrorMessage(error: unknown): string {
   return "Unknown agentic vision failure.";
 }
 
+async function runFastVisionPass(
+  client: NonNullable<ReturnType<typeof getGeminiClient>>,
+  base64Data: string,
+  mimeType: string,
+  visionPrompt: string,
+  room: string,
+  measureMode: boolean,
+  startedAt: number,
+) {
+  let lastError: unknown;
+
+  for (const [index, model] of FAST_VISION_MODELS.entries()) {
+    try {
+      logVisionInfo("fast-pass-start", {
+        room,
+        measureMode,
+        model,
+        mimeType,
+        startedAt,
+        fallbackIndex: index,
+        candidates: FAST_VISION_MODELS,
+      });
+
+      const response = await client.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: base64Data } },
+              { text: visionPrompt },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+
+      return { model, response };
+    } catch (error) {
+      lastError = error;
+      logVisionFailure("fast-pass", {
+        room,
+        measureMode,
+        model,
+        mimeType,
+        error: toLoggableError(error),
+      });
+
+      const nextModel = FAST_VISION_MODELS[index + 1];
+      if (nextModel && shouldTryModelFallback(error)) {
+        logVisionInfo("model-fallback", {
+          stage: "fast-pass",
+          fromModel: model,
+          toModel: nextModel,
+          room,
+          measureMode,
+        });
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError ?? new Error("No fast vision model candidates configured.");
+}
+
 /** Second-pass agentic verification with code execution for ambiguous defects. */
 async function triggerAgenticPass(
   base64Data: string,
@@ -61,6 +183,7 @@ async function triggerAgenticPass(
 ): Promise<Partial<VisionResponse> | null> {
   const client = getGeminiClient();
   if (!client) return null;
+  const startedAt = performance.now();
 
   const bboxContext = fastResult.bbox
     ? `\nThe fast pass identified a bounding box at [${fastResult.bbox.join(", ")}] (normalized 0-1000).`
@@ -75,10 +198,10 @@ async function triggerAgenticPass(
 ${CONQUAS_SEVERITY_PROMPT}
 
 ${measureMode
-    ? `MEASUREMENT MODE:
+      ? `MEASUREMENT MODE:
 - A Singapore 50-cent coin (24.66mm diameter) should be visible as the scale reference.
 - Use code execution to inspect the image, zoom into the defect, and estimate width/length using the coin when possible.`
-    : "Use code execution to analyze the image if helpful (e.g. measure crack width relative to reference objects, check color distribution for water stains)."}
+      : "Use code execution to analyze the image if helpful (e.g. measure crack width relative to reference objects, check color distribution for water stains)."}
 Then provide your final verified assessment.
 
 Return ONLY valid JSON:
@@ -100,8 +223,15 @@ Return ONLY valid JSON:
 }`;
 
   try {
+    logVisionInfo("agentic-pass-start", {
+      room,
+      measureMode,
+      model: AGENTIC_VISION_MODEL,
+      mimeType,
+      startedAt,
+    });
     const response = await client.models.generateContent({
-      model: VISION_MODEL,
+      model: AGENTIC_VISION_MODEL,
       contents: [
         {
           role: "user",
@@ -112,9 +242,12 @@ Return ONLY valid JSON:
         },
       ],
       config: {
+        temperature: 0,
         tools: [{ codeExecution: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        responseMimeType: "text/plain",
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.MINIMAL,
+          includeThoughts: false,
+        },
       },
     });
 
@@ -129,11 +262,27 @@ Return ONLY valid JSON:
     }
     if (!lastText) return null;
 
-    // Extract JSON from potential markdown fences
-    const jsonMatch = lastText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, lastText];
-    const cleaned = (jsonMatch[1] ?? lastText).trim();
-    return JSON.parse(cleaned) as Partial<VisionResponse>;
+    // Extract JSON: try the last ```json...``` fence first, then fall back to first { ... } block.
+    const fenceMatches = [...lastText.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)];
+    const fenceJson = fenceMatches.length ? fenceMatches[fenceMatches.length - 1][1].trim() : null;
+    const rawJson = fenceJson ?? lastText.match(/\{[\s\S]*\}/)?.[0]?.trim() ?? lastText.trim();
+    const parsed = JSON.parse(rawJson) as Partial<VisionResponse>;
+    logVisionInfo("agentic-pass-success", {
+      room,
+      measureMode,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      hasMeasurement: Boolean(parsed.measurement),
+    });
+    return parsed;
   } catch (error) {
+    logVisionFailure("agentic-pass", {
+      room,
+      measureMode,
+      model: AGENTIC_VISION_MODEL,
+      mimeType,
+      fastResult,
+      error: toLoggableError(error),
+    });
     throw new Error(toAgenticErrorMessage(error));
   }
 }
@@ -273,6 +422,7 @@ export function useCamera(): UseCameraReturn {
     const agenticContext = base64Match
       ? { mimeType: base64Match[1], base64Data: base64Match[2] }
       : null;
+    const startedAt = performance.now();
 
     const result = await withRetryAndFallback(
       async () => {
@@ -289,7 +439,6 @@ export function useCamera(): UseCameraReturn {
         }
 
         const { mimeType, base64Data } = agenticContext;
-
         const measurementInstructions = measureMode
           ? `\n\nMEASUREMENT MODE: A Singapore 50-cent coin (24.66mm diameter) should be visible as a size reference.
 Estimate the physical dimensions of the defect relative to the coin.
@@ -323,21 +472,15 @@ Return a JSON object with:
 
 If no defect is visible, still return your best assessment. Return ONLY valid JSON.`;
 
-        const response = await client.models.generateContent({
-          model: VISION_MODEL,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inlineData: { mimeType, data: base64Data } },
-                { text: visionPrompt },
-              ],
-            },
-          ],
-          config: {
-            responseMimeType: "application/json",
-          },
-        });
+        const { model: selectedFastVisionModel, response } = await runFastVisionPass(
+          client,
+          base64Data,
+          mimeType,
+          visionPrompt,
+          currentRoom,
+          measureMode,
+          startedAt,
+        );
 
         const text = response.text?.trim();
         if (!text) throw new Error("Empty response from Gemini Vision");
@@ -366,11 +509,18 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
           defect.measurement = parsed.measurement;
         }
 
+        logVisionInfo("fast-pass-success", {
+          room: currentRoom,
+          measureMode,
+          model: selectedFastVisionModel,
+          elapsedMs: Math.round(performance.now() - startedAt),
+          hasMeasurement: Boolean(parsed.measurement),
+        });
         return validateSeverity(defect);
       },
       fallback,
-      15000,
-      GEMINI_RATE_LIMIT_RETRY,
+      measureMode ? MEASURE_VISION_TIMEOUT_MS : VISION_TIMEOUT_MS,
+      GEMINI_VISION_RETRY,
     );
 
     addDefect(result.data);
@@ -381,6 +531,14 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
     const fallbackMessage = result.error?.toLowerCase().includes("api key")
       ? "No Gemini API key configured, so I logged an offline fallback defect for manual verification."
       : "Vision service dropped, but I logged a fallback defect for follow-up.";
+    if (result.error) {
+      logVisionFailure("vision-fallback", {
+        room: currentRoom,
+        measureMode,
+        error: result.error,
+        fallback: result.data,
+      });
+    }
     setInspectorMessage(
       result.error
         ? fallbackMessage
