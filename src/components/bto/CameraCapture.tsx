@@ -45,13 +45,10 @@ export function CameraCapture() {
       {/* Viewfinder */}
       <div className="viewfinder industrial-border">
         {/* Live video feed -- always rendered so browser can connect the stream */}
-        {/* eslint-disable-next-line react/no-unknown-property */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          // @ts-expect-error -- webkit prefix needed for iOS Safari live preview
-          webkit-playsinline=""
           muted
           className="viewfinder-video"
         />
