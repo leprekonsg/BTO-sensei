@@ -29,6 +29,18 @@ export const GEMINI_RATE_LIMIT_RETRY: Partial<RetryConfig> = {
   maxDelayMs: 16000,
 };
 
+export const GEMINI_REPORT_RETRY: Partial<RetryConfig> = {
+  maxAttempts: 2,
+  baseDelayMs: 1000,
+  maxDelayMs: 4000,
+};
+
+export const GEMINI_SUMMARY_RETRY: Partial<RetryConfig> = {
+  maxAttempts: 1,
+  baseDelayMs: 500,
+  maxDelayMs: 500,
+};
+
 const DEFAULT_RETRY: RetryConfig = {
   maxAttempts: 3,
   baseDelayMs: 500,

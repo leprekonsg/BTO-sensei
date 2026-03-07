@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useBTOStore } from "../../lib/store";
-import { generateCoverSummary } from "../../lib/gemini-report";
+import { generateCoverSummary, generateLocalCoverSummary } from "../../lib/gemini-report";
 import { FloorPlanSVG } from "./FloorPlanSVG";
 import type { FlatType } from "../../lib/types";
 import "./ReportDashboard.css";
@@ -20,9 +20,16 @@ export function ReportDashboard() {
   const [showAnnotations, setShowAnnotations] = useState(false);
 
   async function handleGenerateReport() {
+    setCoverSummary(null);
     await requestReport("HB-402-A");
-    const reportData = useBTOStore.getState().report.data;
+    const reportState = useBTOStore.getState().report;
+    const reportData = reportState.data;
     if (reportData) {
+      if (reportState.error) {
+        setCoverSummary(generateLocalCoverSummary(reportData, flatType));
+        return;
+      }
+
       setCoverLoading(true);
       try {
         const summary = await generateCoverSummary(reportData, flatType);

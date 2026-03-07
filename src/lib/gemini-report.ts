@@ -1,3 +1,4 @@
+import { withRetryAndFallback, GEMINI_SUMMARY_RETRY } from "./fallback";
 import { getGeminiClient } from "../hooks/use-bto-config";
 import { getRoomCenters } from "./room-geometry";
 import type {
@@ -11,7 +12,71 @@ import type {
 } from "./types";
 import { ROOMS } from "./types";
 
-const REPORT_MODEL = "gemini-3-flash-preview";
+const REPORT_MODEL =
+  (import.meta.env?.VITE_GEMINI_REPORT_MODEL as string | undefined) ||
+  "gemini-2.5-flash";
+const COVER_SUMMARY_TIMEOUT_MS = 8000;
+
+const reportResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["flat_id", "inspection_date", "overall_health_score", "room_scores", "priority_defects", "inspector_note"],
+  properties: {
+    flat_id: { type: "string" },
+    inspection_date: { type: "string" },
+    overall_health_score: { type: "number" },
+    room_scores: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["room", "score", "summary"],
+        properties: {
+          room: { type: "string" },
+          score: { type: "number" },
+          summary: { type: "string" },
+        },
+      },
+    },
+    priority_defects: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          room: { type: "string" },
+          defect_type: { type: "string" },
+          severity: { type: "string", enum: ["Minor", "Moderate", "Critical"] },
+          description: { type: "string" },
+          recommendation: { type: "string" },
+          confidence: { type: "number" },
+          photo_url: { type: "string" },
+          timestamp: { type: "number" },
+          severity_rationale: { type: "string" },
+          review_required: { type: "boolean" },
+          bbox: {
+            type: "array",
+            minItems: 4,
+            maxItems: 4,
+            items: { type: "number" },
+          },
+          measurement: {
+            type: "object",
+            properties: {
+              width_mm: { type: "number" },
+              length_mm: { type: "number" },
+              depth_mm: { type: "string" },
+              reference_object: { type: "string" },
+              notes: { type: "string" },
+            },
+          },
+          agentic_pass: { type: "boolean" },
+        },
+      },
+    },
+    inspector_note: { type: "string" },
+  },
+};
 
 function severityPenalty(severity: Severity) {
   switch (severity) {
@@ -153,6 +218,7 @@ Return ONLY valid JSON, no markdown fences.`;
     contents: prompt,
     config: {
       responseMimeType: "application/json",
+      responseJsonSchema: reportResponseSchema,
     },
   });
 
@@ -217,15 +283,27 @@ Critical Issues: ${report.priority_defects.filter(d => d.severity === "Critical"
 
 Write in professional English (not Singlish). Be concise and authoritative. Return ONLY the summary text, no JSON.`;
 
-  const response = await client.models.generateContent({
-    model: REPORT_MODEL,
-    contents: prompt,
-  });
+  const fallback = generateLocalCoverSummary(report, flatType);
+  const result = await withRetryAndFallback(
+    async () => {
+      const response = await client.models.generateContent({
+        model: REPORT_MODEL,
+        contents: prompt,
+      });
 
-  return response.text?.trim() || generateLocalCoverSummary(report, flatType);
+      const summary = response.text?.trim();
+      if (!summary) throw new Error("Empty cover summary from Gemini");
+      return summary;
+    },
+    fallback,
+    COVER_SUMMARY_TIMEOUT_MS,
+    GEMINI_SUMMARY_RETRY,
+  );
+
+  return result.data;
 }
 
-function generateLocalCoverSummary(report: InspectionReport, flatType: FlatType): string {
+export function generateLocalCoverSummary(report: InspectionReport, flatType: FlatType): string {
   const criticalCount = report.priority_defects.filter(d => d.severity === "Critical").length;
   const score = report.overall_health_score;
   const verdict = score >= 85 ? "excellent" : score >= 70 ? "acceptable" : "below standard";

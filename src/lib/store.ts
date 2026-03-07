@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { FALLBACKS, GEMINI_RATE_LIMIT_RETRY, withRetryAndFallback } from "./fallback";
+import { FALLBACKS, GEMINI_REPORT_RETRY, withRetryAndFallback } from "./fallback";
 import { clampBBox } from "./defect-utils";
 import { deriveBlueprintCoords, generateInspectionReport } from "./gemini-report";
 import type {
@@ -62,6 +62,25 @@ function buildReportState(data: InspectionReport | null): AsyncState<InspectionR
     loading: false,
     error: null,
   };
+}
+
+function buildReportStatusMessage(error: string | null): string {
+  if (!error) {
+    return "Report ready lah. Prioritise the serious items first.";
+  }
+
+  const lowered = error.toLowerCase();
+  if (lowered.includes("timed out")) {
+    return "AI report generation took too long, so I loaded a fallback report. Review it before sharing.";
+  }
+  if (lowered.includes("api key")) {
+    return "No Gemini API key configured. Generated a local report for manual review.";
+  }
+  if (lowered.includes("429") || lowered.includes("rate")) {
+    return "Gemini rate-limited the report request, so I loaded a fallback report. Try again shortly.";
+  }
+
+  return "Report generated using fallback data. Review before sharing.";
 }
 
 function buildBlueprintState(defects: BTOStore["defects"], flatType: FlatType): AsyncState<BlueprintCoord[]> {
@@ -126,8 +145,8 @@ export const useBTOStore = create<BTOStore>()(
             return generateInspectionReport(defects, flatId, inspectionDate);
           },
           FALLBACKS.report(flatId, defects),
-          15000,
-          GEMINI_RATE_LIMIT_RETRY,
+          30000,
+          GEMINI_REPORT_RETRY,
         );
 
         set({
@@ -136,9 +155,7 @@ export const useBTOStore = create<BTOStore>()(
             loading: false,
             error: result.error,
           },
-          inspectorMessage: result.error
-            ? "Report generated using fallback data. Review before sharing."
-            : "Report ready lah. Prioritise the serious items first.",
+          inspectorMessage: buildReportStatusMessage(result.error),
         });
       },
       blueprintCoords: emptyAsyncState<BlueprintCoord[]>(),
