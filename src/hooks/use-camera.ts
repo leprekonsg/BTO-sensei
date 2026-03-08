@@ -628,6 +628,8 @@ export function useCamera(): UseCameraReturn {
           bbox: clampBBox(parsed.bbox),
           conquas_item_id: lookupConquasItemId(parsed.defect_type || ""),
           conquas_appendix: lookupConquasAppendix(parsed.defect_type || ""),
+          classification_stage: "fast-vision",
+          cloud_status: "completed",
         };
 
         const measurement = normalizeMeasurement(parsed.measurement);
@@ -719,7 +721,7 @@ export function useCamera(): UseCameraReturn {
           const refined = mergeVisionUpdate({ ...result.data, agentic_pass: true }, agenticResult);
           const measurement = normalizeMeasurement(agenticResult.measurement);
           const measurementPatch = measurement ? { measurement } : {};
-          updateDefect(result.data.id, { ...refined, ...measurementPatch, agentic_pass: true });
+          updateDefect(result.data.id, { ...refined, ...measurementPatch, agentic_pass: true, classification_stage: "agentic-vision" as const });
           setInspectorMessage(`${refined.defect_type} verified with second-pass analysis in ${currentRoom}.`);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Agentic verification failed";
@@ -835,6 +837,8 @@ function inferDefectLocal(
     evidence_thumbnail: source === "hud-vision" ? frameUrl : undefined,
     severity_rationale: rationale,
     review_required: reviewRequired || undefined,
+    classification_stage: "heuristic",
+    cloud_status: "offline",
   };
 
   if (measureMode) {

@@ -1,5 +1,6 @@
 import { clampBBox } from "../defect-utils";
 import { CONQUAS_LABELS, type ConquasLabel } from "../conquas";
+import { mapToAppDefectClass } from "./defect-class-filter";
 import type {
   Detector,
   DetectorBackend,
@@ -242,10 +243,13 @@ export class YoloConquasDetector implements Detector {
 
       const clamped = clampBBox([yMin, xMin, yMax, xMax]);
       if (clamped) {
+        const rawLabel = CLASS_MAP[bestClass] ?? "unknown";
         boxes.push({
           bbox: clamped,
           score: bestScore,
-          label: CLASS_MAP[bestClass] ?? "unknown",
+          label: rawLabel,
+          rawLabel,
+          defectClass: mapToAppDefectClass(rawLabel) ?? undefined,
         });
       }
     }

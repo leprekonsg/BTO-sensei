@@ -127,6 +127,9 @@ export function validateSeverity(defect: Defect): Defect {
       defect.conquas_item_id ?? lookupConquasItemId(defect.defect_type),
     conquas_appendix:
       defect.conquas_appendix ?? lookupConquasAppendix(defect.defect_type),
+    // v12: populate classification stage if not already set
+    classification_stage:
+      defect.classification_stage ?? (defect.agentic_pass ? "agentic-vision" : "fast-vision"),
   };
   const typeLower = next.defect_type.toLowerCase();
   const descLower = next.description.toLowerCase();
@@ -168,6 +171,24 @@ export function validateSeverity(defect: Defect): Defect {
     next.review_required = true;
     if (!next.severity_rationale) {
       next.severity_rationale = "Low-confidence classification. Verify on site.";
+    }
+  }
+
+  // v12: flag manual measurement required for dimensional defects without measurement data
+  if (!next.manual_measurement_required) {
+    const needsMeasurement =
+      /lippage|gap|verticality|evenness|misalignment|manual\s*measure/i.test(
+        next.defect_type,
+      );
+    const hasMeasurement = next.measurement && (
+      next.measurement.gap_mm !== undefined ||
+      next.measurement.lippage_mm !== undefined ||
+      next.measurement.width_mm !== undefined ||
+      next.measurement.verticality_mm_per_m !== undefined ||
+      next.measurement.surface_evenness_mm !== undefined
+    );
+    if (needsMeasurement && !hasMeasurement) {
+      next.manual_measurement_required = true;
     }
   }
 

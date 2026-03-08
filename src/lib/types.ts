@@ -8,6 +8,35 @@ export type HudAnchorStatus = "pending" | "locked" | "explaining" | "resolved" |
 export type HudAnchorSide = "left" | "right";
 export type HudMode = "vision" | "acoustic";
 
+// v12: classification and cloud status tracking
+export type ClassificationStage = "fast-vision" | "agentic-vision" | "dwell-explanation" | "heuristic" | "acoustic";
+export type CloudStatus = "pending" | "in-flight" | "completed" | "failed" | "offline";
+
+// v12: app-safe visual defect classes (dimensional labels like lippage suppressed from live optical path)
+export type AppDefectClass = "crack" | "stain" | "spalling" | "delamination";
+
+// v12: cloud dwell explanation result
+export interface VisualExplanationResult {
+  label: string;
+  severity: Severity;
+  confidenceText: string;
+  likelyRuleBasis: string;
+  manualCheckRequired: boolean;
+  notes: string;
+  ahSengCommentary: string;
+}
+
+// v12: explanation queue for dwell-triggered cloud calls
+export interface ExplanationQueueItem {
+  id: string;
+  detectionId: string;
+  cropDataUrl: string;
+  status: CloudStatus;
+  result: VisualExplanationResult | null;
+  retries: number;
+  createdAt: number;
+}
+
 export interface HudSupport {
   mode: "manual" | "auto" | "auto-fallback";
   backend: "webgpu" | "webgl" | "wasm" | "none";
@@ -21,7 +50,8 @@ export interface HudDetection {
   label_hint?: string;
   stability: number;
   last_seen_at: number;
-  source: "manual" | "canvas-detector";
+  source: "manual" | "canvas-detector" | "onnx-yolo26" | "tfjs-yolo";
+  defectClass?: AppDefectClass;
 }
 
 export interface HudAnchor {
@@ -48,6 +78,7 @@ export interface TapResult {
   type: TapClassification;
   confidence: number;
   commentary: string;
+  acoustic_certainty?: number;
 }
 
 export interface Measurement {
@@ -82,6 +113,9 @@ export interface Defect {
   conquas_item_id?: string;
   conquas_appendix?: string;
   conquas_verdict?: ConquasVerdict;
+  classification_stage?: ClassificationStage;
+  manual_measurement_required?: boolean;
+  cloud_status?: CloudStatus;
 }
 
 export interface RoomScore {
@@ -170,6 +204,10 @@ export interface BTOStore {
   setFailureMode: (mode: FailureMode, enabled: boolean) => void;
   apiKeyVersion: number;
   bumpApiKeyVersion: () => void;
+  explanationQueue: ExplanationQueueItem[];
+  enqueueExplanation: (item: ExplanationQueueItem) => void;
+  updateExplanation: (id: string, patch: Partial<ExplanationQueueItem>) => void;
+  clearCompletedExplanations: () => void;
 }
 
 export interface UseBTOAudioReturn {

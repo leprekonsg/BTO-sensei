@@ -73,6 +73,7 @@ export function trackedToHudDetection(tracked: TrackedDetection): HudDetection {
     stability: tracked.stability,
     last_seen_at: Date.now(),
     source: "canvas-detector",
+    defectClass: tracked.defectClass,
   };
 }
 

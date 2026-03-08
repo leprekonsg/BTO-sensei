@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { CanvasDetector } from "../lib/vision/canvas-detector";
+import { filterDetectorBoxes } from "../lib/vision/defect-class-filter";
 import type { Detector } from "../lib/vision/detector-types";
 import {
   DEFAULT_DETECTOR_CONFIG,
@@ -48,6 +49,22 @@ async function createPreferredDetector(): Promise<Detector> {
     return fallback;
   }
 
+  // v12: Try ONNX YOLO26N first
+  try {
+    const onnxModule = await import("../lib/vision/onnx-detector");
+    if (await onnxModule.isOnnxYolo26ReadyForRuntime()) {
+      const detector: Detector = new onnxModule.OnnxYolo26Detector();
+      await detector.initialize();
+      if (detector.status !== "unavailable" && detector.status !== "error") {
+        return detector;
+      }
+      detector.dispose();
+    }
+  } catch {
+    // Fall through to TF.js YOLO.
+  }
+
+  // Try TF.js YOLO11n
   try {
     const yoloModule = await import("../lib/vision/yolo-conquas");
     if (await yoloModule.isYoloConquasReadyForRuntime()) {
@@ -134,7 +151,9 @@ export function useHudDetector({
             .detect(video)
             .then((result) => {
               if (disposed) return;
-              const tracked = tracker.update(result.boxes, frame);
+              // v12: filter dimensional labels and annotate app-safe defectClass
+              const filtered = filterDetectorBoxes(result.boxes);
+              const tracked = tracker.update(filtered, frame);
               const warmUpProgress =
                 detector.status === "warming-up"
                   ? Math.min(1, frame / DEFAULT_DETECTOR_CONFIG.warmUpFrames)

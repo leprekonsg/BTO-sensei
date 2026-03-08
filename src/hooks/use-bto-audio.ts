@@ -1,11 +1,53 @@
 import { loadTapSample, recordMicTap } from "../lib/audio-samples";
-import { analyzeAudioBuffer, classifyTap, downsampleForDisplay } from "../lib/dsp";
+import {
+  analyzeAudioBuffer,
+  classifyTap,
+  classifyTapSecondStage,
+  downsampleForDisplay,
+  isAcousticAmbiguous,
+} from "../lib/dsp";
 import { FALLBACKS, withFallback } from "../lib/fallback";
 import { buildAcousticCommentary, sendAcousticToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
 import type { TapResult, UseBTOAudioReturn } from "../lib/types";
 
 const DEFAULT_SAMPLE_RATE = 44100;
+
+async function resolveAcousticResult(
+  audioBuffer: AudioBuffer,
+  freqData: Float32Array,
+): Promise<TapResult> {
+  const sampleRate = audioBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
+  const firstPass = classifyTap(freqData, sampleRate);
+
+  if (!isAcousticAmbiguous(firstPass.confidence)) {
+    return {
+      ...firstPass,
+      acoustic_certainty: 0.6,
+      commentary: buildAcousticCommentary(firstPass, false),
+    };
+  }
+
+  const secondStage = await classifyTapSecondStage(audioBuffer);
+  if (secondStage) {
+    const refined: TapResult = {
+      type: secondStage.type,
+      confidence: secondStage.confidence,
+      acoustic_certainty: secondStage.acoustic_certainty,
+      commentary: "",
+    };
+    return {
+      ...refined,
+      commentary: buildAcousticCommentary(refined, false),
+    };
+  }
+
+  return {
+    ...firstPass,
+    acoustic_certainty: 0.3,
+    commentary: buildAcousticCommentary(firstPass, false),
+  };
+}
 
 export function useBTOAudio(): UseBTOAudioReturn {
   const audioMode = useBTOStore((state) => state.audioMode);
@@ -48,14 +90,7 @@ export function useBTOAudio(): UseBTOAudioReturn {
         const freqData = await analyzeAudioBuffer(audioBuffer);
         const displayData = downsampleForDisplay(freqData, 64);
         setFrequencyData(displayData);
-
-        // Multi-band energy ratio classification with Z-score normalization
-        const sampleRate = audioBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
-        const classified = classifyTap(freqData, sampleRate);
-        return {
-          ...classified,
-          commentary: buildAcousticCommentary(classified, false),
-        };
+        return resolveAcousticResult(audioBuffer, freqData);
       },
       fallback,
     );
@@ -92,13 +127,7 @@ export function useBTOAudio(): UseBTOAudioReturn {
         const freqData = await analyzeAudioBuffer(audioBuffer);
         const displayData = downsampleForDisplay(freqData, 64);
         setFrequencyData(displayData);
-
-        const sampleRate = audioBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
-        const classified = classifyTap(freqData, sampleRate);
-        return {
-          ...classified,
-          commentary: buildAcousticCommentary(classified, false),
-        };
+        return resolveAcousticResult(audioBuffer, freqData);
       },
       FALLBACKS.acoustic.hollow,
       5000, // longer timeout for mic recording

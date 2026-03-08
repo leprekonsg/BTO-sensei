@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBTOAudio } from "../../hooks/use-bto-audio";
 import { useCamera } from "../../hooks/use-camera";
+import { useDwellExplanation } from "../../hooks/use-dwell-explanation";
 import { useHudDetector } from "../../hooks/use-hud-detector";
+import { validateSeverity } from "../../lib/defect-utils";
 import { useBTOStore } from "../../lib/store";
 import { acousticConquasSeverity } from "../../lib/conquas";
+import { formatAppDefectClass } from "../../lib/vision/defect-class-filter";
 import {
   buildHudAnchor,
   createManualHudDetection,
@@ -36,6 +39,49 @@ function anchorSummary(defect: Defect) {
     return `${defect.severity} \u00B7 ${confidence} \u00B7 verify on site`;
   }
   return `${defect.severity} \u00B7 ${confidence}`;
+}
+
+function confidenceFromText(confidenceText: string): number {
+  const lowered = confidenceText.toLowerCase();
+  if (lowered.includes("high")) return 0.85;
+  if (lowered.includes("low")) return 0.45;
+  return 0.65;
+}
+
+function buildDwellDefect(
+  room: string,
+  bbox: [number, number, number, number],
+  photoUrl: string,
+  result: {
+    label: string;
+    severity: Defect["severity"];
+    confidenceText: string;
+    likelyRuleBasis: string;
+    manualCheckRequired: boolean;
+    notes: string;
+  },
+): Defect {
+  return validateSeverity({
+    id: nextId("dwell-defect"),
+    room,
+    defect_type: result.label,
+    severity: result.severity,
+    description: result.notes || `${result.label} highlighted from a dwell-confirmed HUD crop.`,
+    recommendation: result.manualCheckRequired
+      ? "Log this item and verify on site before submitting the report."
+      : "Log this visual defect and request contractor rectification.",
+    confidence: confidenceFromText(result.confidenceText),
+    photo_url: photoUrl,
+    timestamp: Date.now(),
+    bbox,
+    source: "hud-vision",
+    evidence_thumbnail: photoUrl,
+    severity_rationale: result.likelyRuleBasis,
+    review_required: result.manualCheckRequired || undefined,
+    classification_stage: "dwell-explanation",
+    manual_measurement_required: result.manualCheckRequired,
+    cloud_status: "completed",
+  });
 }
 
 function createHollowDefect(
@@ -132,6 +178,41 @@ export function HeadsUpView() {
   // ---- Detector integration ----
   const detectorEnabled = hudMode === "vision" && streamActive;
 
+  const handleDwellExplanation = useCallback(
+    (detectionId: string, result: Parameters<typeof buildDwellDefect>[3], cropDataUrl: string) => {
+      const { hudAnchors: liveAnchors, hudDetections: liveDetections } = useBTOStore.getState();
+      const anchor = liveAnchors.find((entry) => entry.detection_id === detectionId);
+      const detection = liveDetections.find((entry) => entry.id === detectionId);
+      if (!anchor || !detection) return;
+
+      const defect = buildDwellDefect(currentRoom, detection.bbox, cropDataUrl, result);
+      addDefect(defect);
+      upsertHudAnchor({
+        ...anchor,
+        status: result.manualCheckRequired ? "review-required" : "resolved",
+        title: result.label,
+        subtitle: result.manualCheckRequired
+          ? `${result.severity} \u00B7 verify on site`
+          : `${result.severity} \u00B7 ${result.confidenceText}`,
+        defect_id: defect.id,
+        review_required: result.manualCheckRequired,
+      });
+      setInspectorMessage(
+        result.manualCheckRequired
+          ? `${result.label} flagged in ${currentRoom}. Manual confirmation still required.`
+          : `${result.label} explained and logged in ${currentRoom}.`,
+      );
+    },
+    [addDefect, currentRoom, setInspectorMessage, upsertHudAnchor],
+  );
+
+  const { onDetectionsUpdate: onDwellDetectionsUpdate } = useDwellExplanation({
+    videoRef,
+    enabled: detectorEnabled,
+    resetKey: currentRoom,
+    onExplanation: handleDwellExplanation,
+  });
+
   const handleAutoDetections = useCallback(
     (tracked: TrackedDetection[]) => {
       const stable = tracked.filter(
@@ -144,7 +225,7 @@ export function HeadsUpView() {
         addHudDetection(hudDet);
         const anchor = buildHudAnchor(hudDet, hudAnchors.length, "pending", {
           id: `auto-${det.id}`,
-          title: det.label,
+          title: det.defectClass ? formatAppDefectClass(det.defectClass) : det.label,
           subtitle: `${Math.round(det.score * 100)}% confidence`,
         });
         upsertHudAnchor(anchor);
@@ -153,10 +234,18 @@ export function HeadsUpView() {
     [hudAnchors, addHudDetection, upsertHudAnchor],
   );
 
+  const handleTrackedDetections = useCallback(
+    (tracked: TrackedDetection[]) => {
+      handleAutoDetections(tracked);
+      onDwellDetectionsUpdate(tracked);
+    },
+    [handleAutoDetections, onDwellDetectionsUpdate],
+  );
+
   const { detectorStatus, fps, warmUpProgress } = useHudDetector({
     videoRef,
     enabled: detectorEnabled,
-    onDetections: handleAutoDetections,
+    onDetections: handleTrackedDetections,
   });
 
   // Update HUD support badge whenever detector status changes.

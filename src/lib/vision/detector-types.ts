@@ -1,3 +1,5 @@
+import type { AppDefectClass } from "../types";
+
 export type DetectorBackend = "webgpu" | "webgl" | "wasm" | "none";
 export type DetectorStatus =
   | "idle"
@@ -12,6 +14,10 @@ export interface DetectorBox {
   bbox: [number, number, number, number];
   score: number;
   label: string;
+  /** v12: app-safe defect class (crack, stain, spalling, delamination) */
+  defectClass?: AppDefectClass;
+  /** v12: original detector raw label before class filtering */
+  rawLabel?: string;
 }
 
 export interface DetectorResult {

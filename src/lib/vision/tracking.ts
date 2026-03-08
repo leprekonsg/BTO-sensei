@@ -1,3 +1,4 @@
+import type { AppDefectClass } from "../types";
 import type { DetectorBox } from "./detector-types";
 
 export interface TrackedDetection {
@@ -8,6 +9,10 @@ export interface TrackedDetection {
   framesSeen: number;
   lastSeenFrame: number;
   stability: number;
+  /** v12: app-safe defect class */
+  defectClass?: AppDefectClass;
+  /** v12: original detector raw label */
+  rawLabel?: string;
 }
 
 function computeIoU(
@@ -64,6 +69,8 @@ export class DetectionTracker {
           bbox: box.bbox,
           score: box.score,
           label: box.label,
+          defectClass: box.defectClass ?? bestMatch.defectClass,
+          rawLabel: box.rawLabel ?? bestMatch.rawLabel,
           framesSeen: bestMatch.framesSeen + 1,
           lastSeenFrame: frame,
           stability: Math.min(1, bestMatch.stability + 0.12),
@@ -77,6 +84,8 @@ export class DetectionTracker {
           bbox: box.bbox,
           score: box.score,
           label: box.label,
+          defectClass: box.defectClass,
+          rawLabel: box.rawLabel,
           framesSeen: 1,
           lastSeenFrame: frame,
           stability: 0.1,

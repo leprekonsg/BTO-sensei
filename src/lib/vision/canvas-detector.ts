@@ -1,4 +1,5 @@
 import { clampBBox } from "../defect-utils";
+import { mapToAppDefectClass } from "./defect-class-filter";
 import type {
   Detector,
   DetectorBackend,
@@ -216,11 +217,13 @@ export class CanvasDetector implements Detector {
         const clamped = clampBBox([yMin, xMin, yMax, xMax]);
         if (clamped) {
           // Map heuristic anomaly type to CONQUAS Appendix 4 labels
-          const label = edgeZ > colorZ ? "wall_crack" : "stain_mark";
+          const rawLabel = edgeZ > colorZ ? "wall_crack" : "stain_mark";
           boxes.push({
             bbox: clamped,
             score: Math.min(1, anomalyScore),
-            label,
+            label: rawLabel,
+            rawLabel,
+            defectClass: mapToAppDefectClass(rawLabel) ?? undefined,
           });
         }
       }

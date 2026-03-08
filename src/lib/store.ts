@@ -7,6 +7,7 @@ import type {
   AsyncState,
   BlueprintCoord,
   BTOStore,
+  ExplanationQueueItem,
   FailureMode,
   FlatType,
   InspectionReport,
@@ -216,6 +217,23 @@ export const useBTOStore = create<BTOStore>()(
       apiKeyVersion: 0,
       bumpApiKeyVersion: () =>
         set((state) => ({ apiKeyVersion: state.apiKeyVersion + 1 })),
+      explanationQueue: [] as ExplanationQueueItem[],
+      enqueueExplanation: (item: ExplanationQueueItem) =>
+        set((state) => ({
+          explanationQueue: [...state.explanationQueue, item].slice(-50),
+        })),
+      updateExplanation: (id: string, patch: Partial<ExplanationQueueItem>) =>
+        set((state) => ({
+          explanationQueue: state.explanationQueue.map((entry) =>
+            entry.id === id ? { ...entry, ...patch } : entry,
+          ),
+        })),
+      clearCompletedExplanations: () =>
+        set((state) => ({
+          explanationQueue: state.explanationQueue.filter(
+            (entry) => entry.status !== "completed" && entry.status !== "failed",
+          ),
+        })),
     }),
     {
       name: "bto-store",

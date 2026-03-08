@@ -131,7 +131,10 @@ function formatDefectForReport(defect: Defect, index: number): string {
   const conquasRef = defect.conquas_appendix
     ? ` [CONQUAS: ${defect.conquas_appendix}, Item ${defect.conquas_item_id}]`
     : "";
-  return `${index + 1}. [${defect.room}] ${defect.defect_type} (${defect.severity}) - ${defect.description}.${confidence}${verifyTag}${rationale}${conquasRef}`;
+  // v12: include classification stage and measurement flag
+  const stageTag = defect.classification_stage ? ` Stage: ${defect.classification_stage}.` : "";
+  const measureTag = defect.manual_measurement_required ? " MANUAL MEASUREMENT REQUIRED." : "";
+  return `${index + 1}. [${defect.room}] ${defect.defect_type} (${defect.severity}) - ${defect.description}.${confidence}${verifyTag}${measureTag}${stageTag}${rationale}${conquasRef}`;
 }
 
 function hydratePriorityDefects(priorityDefects: Defect[] | undefined, defects: Defect[]): Defect[] {
@@ -161,7 +164,13 @@ export function enrichDefectWithConquas(defect: Defect): Defect {
   const itemId = lookupConquasItemId(defect.defect_type);
   const appendix = lookupConquasAppendix(defect.defect_type);
   if (!itemId) return defect;
-  return { ...defect, conquas_item_id: itemId, conquas_appendix: appendix };
+  return {
+    ...defect,
+    conquas_item_id: itemId,
+    conquas_appendix: appendix,
+    // v12: ensure classification_stage is populated for export
+    classification_stage: defect.classification_stage ?? (defect.agentic_pass ? "agentic-vision" : "fast-vision"),
+  };
 }
 
 /** Local fallback report generation (no AI dependency) */

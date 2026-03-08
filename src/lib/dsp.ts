@@ -181,3 +181,163 @@ export function downsampleForDisplay(
 
 // Re-export for backward compat -- kept minimal
 export { getAudioContext, FFT_SIZE };
+
+/**
+ * v12: Mel-spectrogram feature extraction for second-stage TinyML classifier.
+ * Produces a compact [numMelBands x numFrames] matrix from an AudioBuffer.
+ * Used only for ambiguous first-pass results (confidence near 0.5).
+ */
+
+const MEL_BANDS = 40;
+const MEL_FRAME_SIZE = 512;
+const MEL_HOP_SIZE = 256;
+const MEL_LOW_HZ = 80;
+const MEL_HIGH_HZ = 4000;
+
+function hzToMel(hz: number): number {
+  return 2595 * Math.log10(1 + hz / 700);
+}
+
+function melToHz(mel: number): number {
+  return 700 * (10 ** (mel / 2595) - 1);
+}
+
+function buildMelFilterbank(
+  fftSize: number,
+  sampleRate: number,
+  numBands: number,
+  lowHz: number,
+  highHz: number,
+): Float32Array[] {
+  const numBins = fftSize / 2 + 1;
+  const melLow = hzToMel(lowHz);
+  const melHigh = hzToMel(highHz);
+  const melStep = (melHigh - melLow) / (numBands + 1);
+  const melPoints: number[] = [];
+  for (let i = 0; i <= numBands + 1; i++) {
+    melPoints.push(melToHz(melLow + i * melStep));
+  }
+
+  const binFreq = sampleRate / fftSize;
+  const filterbank: Float32Array[] = [];
+
+  for (let m = 0; m < numBands; m++) {
+    const filter = new Float32Array(numBins);
+    const fStart = melPoints[m];
+    const fCenter = melPoints[m + 1];
+    const fEnd = melPoints[m + 2];
+
+    for (let k = 0; k < numBins; k++) {
+      const freq = k * binFreq;
+      if (freq >= fStart && freq <= fCenter) {
+        filter[k] = (freq - fStart) / (fCenter - fStart);
+      } else if (freq > fCenter && freq <= fEnd) {
+        filter[k] = (fEnd - freq) / (fEnd - fCenter);
+      }
+    }
+    filterbank.push(filter);
+  }
+
+  return filterbank;
+}
+
+/**
+ * Extract a Mel-spectrogram from raw PCM samples.
+ * Returns a Float32Array of [numMelBands * numFrames] in row-major order.
+ */
+export function extractMelSpectrogram(
+  samples: Float32Array,
+  sampleRate: number,
+): { features: Float32Array; numFrames: number; numBands: number } {
+  const numFrames = Math.max(1, Math.floor((samples.length - MEL_FRAME_SIZE) / MEL_HOP_SIZE) + 1);
+  const filterbank = buildMelFilterbank(MEL_FRAME_SIZE, sampleRate, MEL_BANDS, MEL_LOW_HZ, MEL_HIGH_HZ);
+  const features = new Float32Array(MEL_BANDS * numFrames);
+  const fftBins = MEL_FRAME_SIZE / 2 + 1;
+  const window = new Float32Array(MEL_FRAME_SIZE);
+
+  // Hann window
+  for (let i = 0; i < MEL_FRAME_SIZE; i++) {
+    window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (MEL_FRAME_SIZE - 1)));
+  }
+
+  for (let f = 0; f < numFrames; f++) {
+    const offset = f * MEL_HOP_SIZE;
+
+    // Windowed real/imag DFT (simplified — no FFT library needed for small frames)
+    const powerSpectrum = new Float32Array(fftBins);
+    for (let k = 0; k < fftBins; k++) {
+      let re = 0;
+      let im = 0;
+      for (let n = 0; n < MEL_FRAME_SIZE; n++) {
+        const sample = (samples[offset + n] ?? 0) * window[n];
+        const angle = (2 * Math.PI * k * n) / MEL_FRAME_SIZE;
+        re += sample * Math.cos(angle);
+        im -= sample * Math.sin(angle);
+      }
+      powerSpectrum[k] = re * re + im * im;
+    }
+
+    // Apply Mel filterbank
+    for (let m = 0; m < MEL_BANDS; m++) {
+      let energy = 0;
+      const filter = filterbank[m];
+      for (let k = 0; k < fftBins; k++) {
+        energy += powerSpectrum[k] * filter[k];
+      }
+      // Log-Mel energy
+      features[m * numFrames + f] = Math.log(Math.max(energy, 1e-10));
+    }
+  }
+
+  return { features, numFrames, numBands: MEL_BANDS };
+}
+
+/** Ambiguity threshold for first-pass confidence to trigger second-stage. */
+const ACOUSTIC_AMBIGUITY_THRESHOLD = 0.35;
+
+/**
+ * v12: Determine whether a first-pass tap result is ambiguous
+ * and should be sent to the second-stage classifier.
+ */
+export function isAcousticAmbiguous(confidence: number): boolean {
+  return Math.abs(confidence - 0.5) < ACOUSTIC_AMBIGUITY_THRESHOLD;
+}
+
+/**
+ * v12: Second-stage acoustic classifier stub.
+ * When TinyML ONNX model is available, runs inference on Mel features.
+ * Currently returns null (model not yet deployed), letting the caller
+ * keep the first-pass result.
+ */
+let _tinyMlAvailable: boolean | null = null;
+
+async function checkTinyMlAvailability(): Promise<boolean> {
+  if (_tinyMlAvailable !== null) return _tinyMlAvailable;
+
+  try {
+    const response = await fetch("/models/acoustic-tinyml/model.onnx", {
+      method: "HEAD",
+      cache: "no-store",
+    });
+    _tinyMlAvailable = response.ok;
+  } catch {
+    _tinyMlAvailable = false;
+  }
+
+  return _tinyMlAvailable;
+}
+
+export async function classifyTapSecondStage(
+  audioBuffer: AudioBuffer,
+): Promise<{ type: "hollow" | "solid"; confidence: number; acoustic_certainty: number } | null> {
+  if (!(await checkTinyMlAvailability())) return null;
+
+  // Extract Mel-spectrogram features for future TinyML inference
+  const channelData = audioBuffer.getChannelData(0);
+  const { features: _features } = extractMelSpectrogram(channelData, audioBuffer.sampleRate);
+  void _features; // Will be used as model input when TinyML ONNX is deployed
+
+  // Stub: return null until model is deployed
+  return null;
+}
+
