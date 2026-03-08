@@ -138,6 +138,7 @@ export function HeadsUpView() {
   const clearHudSession = useBTOStore((state) => state.clearHudSession);
   const hudTapPoint = useBTOStore((state) => state.hudTapPoint);
   const setHudTapPoint = useBTOStore((state) => state.setHudTapPoint);
+  const explanationQueue = useBTOStore((state) => state.explanationQueue);
 
   // ---- Cancellation generation counter ----
   // Increments on room change, clear, dismiss-of-working-anchor, and
@@ -179,31 +180,28 @@ export function HeadsUpView() {
   const detectorEnabled = hudMode === "vision" && streamActive;
 
   const handleDwellExplanation = useCallback(
-    (detectionId: string, result: Parameters<typeof buildDwellDefect>[3], cropDataUrl: string) => {
+    (detectionId: string, result: Parameters<typeof buildDwellDefect>[3], _cropDataUrl: string) => {
+      void _cropDataUrl;
       const { hudAnchors: liveAnchors, hudDetections: liveDetections } = useBTOStore.getState();
       const anchor = liveAnchors.find((entry) => entry.detection_id === detectionId);
       const detection = liveDetections.find((entry) => entry.id === detectionId);
       if (!anchor || !detection) return;
 
-      const defect = buildDwellDefect(currentRoom, detection.bbox, cropDataUrl, result);
-      addDefect(defect);
       upsertHudAnchor({
         ...anchor,
-        status: result.manualCheckRequired ? "review-required" : "resolved",
+        status: "locked",
         title: result.label,
         subtitle: result.manualCheckRequired
-          ? `${result.severity} \u00B7 verify on site`
-          : `${result.severity} \u00B7 ${result.confidenceText}`,
-        defect_id: defect.id,
-        review_required: result.manualCheckRequired,
+          ? `${result.severity} \u00B7 tap to log and verify`
+          : `${result.severity} \u00B7 tap to log`,
       });
       setInspectorMessage(
         result.manualCheckRequired
-          ? `${result.label} flagged in ${currentRoom}. Manual confirmation still required.`
-          : `${result.label} explained and logged in ${currentRoom}.`,
+          ? `${result.label} explained in ${currentRoom}. Tap the marker to log it for manual verification.`
+          : `${result.label} explained in ${currentRoom}. Tap the marker to log it.`,
       );
     },
-    [addDefect, currentRoom, setInspectorMessage, upsertHudAnchor],
+    [currentRoom, setInspectorMessage, upsertHudAnchor],
   );
 
   const { onDetectionsUpdate: onDwellDetectionsUpdate } = useDwellExplanation({
@@ -308,13 +306,48 @@ export function HeadsUpView() {
 
   async function handlePillTap(anchorId: string) {
     const anchor = hudAnchors.find((a) => a.id === anchorId);
-    if (!anchor || anchor.status !== "pending" || workingAnchorId) return;
+    if (!anchor || (anchor.status !== "pending" && anchor.status !== "locked") || workingAnchorId) return;
 
     const detection =
       hudDetections.find((d) => d.id === anchor.detection_id) ??
       createManualHudDetection(
         { x: anchor.bbox[1], y: anchor.bbox[0], timestamp: Date.now() },
       );
+
+    if (anchor.status === "locked") {
+      const completedExplanation = [...explanationQueue]
+        .reverse()
+        .find(
+          (entry) =>
+            entry.detectionId === anchor.detection_id &&
+            entry.status === "completed" &&
+            entry.result,
+        );
+
+      if (completedExplanation?.result) {
+        const defect = buildDwellDefect(
+          currentRoom,
+          detection.bbox,
+          completedExplanation.cropDataUrl,
+          completedExplanation.result,
+        );
+        addDefect(defect);
+        upsertHudAnchor({
+          ...anchor,
+          status: defect.review_required ? "review-required" : "resolved",
+          title: defect.defect_type,
+          subtitle: anchorSummary(defect),
+          defect_id: defect.id,
+          review_required: defect.review_required,
+        });
+        setInspectorMessage(
+          defect.review_required
+            ? `${defect.defect_type} logged in ${currentRoom}. Verify on site.`
+            : `${defect.defect_type} logged in ${currentRoom}.`,
+        );
+        return;
+      }
+    }
 
     upsertHudAnchor({
       ...anchor,
@@ -656,7 +689,7 @@ export function HeadsUpView() {
               style={{ left: `${anchor.x}%`, top: `${anchor.y}%` }}
               onClick={(event) => {
                 event.stopPropagation();
-                if (anchor.status === "pending") {
+                if (anchor.status === "pending" || anchor.status === "locked") {
                   void handlePillTap(anchor.id);
                 }
               }}
