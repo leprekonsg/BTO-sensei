@@ -176,10 +176,11 @@ export async function withFallback<T>(
   fallback: T,
   timeoutMs = 3000,
 ): Promise<FallbackOutcome<T>> {
+  let timer: number | undefined;
+
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = window.setTimeout(() => {
+    timer = window.setTimeout(() => {
       reject(new Error(`Timed out after ${timeoutMs}ms.`));
-      window.clearTimeout(timer);
     }, timeoutMs);
   });
 
@@ -196,6 +197,8 @@ export async function withFallback<T>(
       error: toErrorMessage(error),
       isFallback: true,
     };
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 

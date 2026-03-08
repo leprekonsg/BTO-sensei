@@ -4,114 +4,227 @@
   <img src="./public/bto_sensei_logo_transparent.png" alt="BTO-Sensei Logo" width="200" />
 </div>
 
-BTO-Sensei is an AI-powered HDB (Housing & Development Board) inspection assistant. Built with React, TypeScript, and Vite, it uses the Gemini Live API alongside custom audio DSP to perform real-time acoustic analysis of floor tiles, capture visible construction defects via camera, and auto-generate structural integrity reports.
+BTO-Sensei is a client-side HDB inspection assistant for Singapore BTO handover checks. It combines Gemini-powered vision, live audio workflows, HUD-based defect review, and CONQUAS 2022 R2 rule mapping to help log issues, verify site evidence, and produce inspection-ready reports.
 
-## Features
+## Current Status
 
-- **Acoustic Scan**: Canvas-based FFT spectrogram visualizing tap frequencies in real-time. "Ah Seng" (AI safety officer persona) provides Singlish commentary based on DSP classification (hollow vs. solid tiles).
-- **Defect Logger**: Camera viewfinder for capturing defect photos. Defects are logged into a scrollable list with severity badges, review flags, measurement readouts, and verification indicators.
-- **Vision Measurement**: Viewfinder measurement toggle indicating a dashed coin-placement guide for Gemini dimension estimation against a standard SG 50-cent coin (24.66mm).
-- **Two-Stage Vision Pipeline**: Fast defect classification runs on a documented `generateContent` fallback chain (`gemini-2.5-flash` then `gemini-2.5-flash-lite` by default), while selective second-pass verification and code-execution measurement run on `gemini-3-flash-preview`.
-- **Agentic Vision Verification**: The second-pass vision agent uses Gemini code execution to inspect ambiguous images, verify severity decisions, refine bounding boxes, and estimate dimensions from a coin reference when measurement mode is enabled.
-- **Report Dashboard**: Professional cover page displaying case metadata, AI-generated executive summaries, health score gauges, and room-by-room breakdowns.
-- **HDB Floor Plan Integration**: Dynamic SVG floor plan layouts corresponding to selectable real HDB flat types (3-room, 4-room, 5-room) for accurate spatial mapping.
-- **Nano Banana Blueprint**: Interactive blueprint component with toggleable, color-coded callout boxes and leader lines mapping defect markers.
+- React 19 + TypeScript + Vite app.
+- Fully client-side. No backend server.
+- Works in offline fallback mode, but Gemini features are limited without an API key.
+- Vercel-ready in its default configuration.
+- HUD auto-detection defaults to the lightweight canvas detector.
+- YOLO HUD detection is optional and not enabled by default.
+
+## What It Does
+
+- Captures inspection photos and runs a fast Gemini vision pass.
+- Optionally runs a second, agentic verification pass with code execution for ambiguous or measurement-heavy cases.
+- Supports measurement mode using an SG 10-cent coin as the reference object.
+- Maps measured results to CONQUAS checks for door gaps, lippage, verticality, and surface evenness.
+- Provides a heads-up HUD flow for ROI review and tap-to-location acoustic checks.
+- Logs defects with severity, rationale, provenance, measurement details, and CONQUAS metadata.
+- Generates a CONQUAS-ready inspection report and browser PDF export.
 
 ## Architecture
 
 ![Architecture Diagram](./public/architecture_diagram.png)
 
-Fully client-side. Two-agent parallel execution (Frontend + Backend) with strict file ownership to prevent merge conflicts.
-
-- **Backend (Logic Layer)**: DSP (`dsp.ts`), Zustand store (`store.ts`), Gemini wiring, tool call handlers, shared type contract (`types.ts`). Wrapper: `BtoApp.tsx`.
-- **Frontend (UI Layer)**: React components (lazy-loaded), CSS variables, Framer Motion animations. Entry: `App.tsx` wrapping `BtoApp`.
-
-State is managed via Zustand. Only serializable primitives (current room, audio mode, defect array) persist to `sessionStorage`. Blobs and `Float32Array` are ephemeral.
+- `src/components/bto/`: UI surfaces including camera capture, HUD, defect cards, blueprint, and report dashboard.
+- `src/hooks/`: app workflows such as camera analysis, Gemini live configuration, HUD detector lifecycle, and audio inspection.
+- `src/lib/`: shared logic including CONQUAS rules, DSP, fallback handling, Gemini prompts/functions, report generation, state, and types.
+- `src/lib/vision/`: detector contract, canvas detector, optional YOLO detector, tracking, frame scheduling, and HUD utilities.
+- `scripts/vision-defect-harness.ts`: lightweight harness for targeted validation.
 
 ## Tech Stack
 
-- **Framework**: React 18, TypeScript, Vite
-- **State**: Zustand (sessionStorage persistence)
-- **AI**: Gemini Live API (native-audio fallback chain by default), Gemini Vision (`gemini-2.5-flash` / `gemini-2.5-flash-lite` fast pass + `gemini-3-flash-preview` agentic pass), function calling, structured output
-- **DSP**: Custom FFT + cosine similarity for tap classification
-- **UI**: Framer Motion, CSS variables, React Suspense for lazy loading
-
-## Design & UI Generation
-
-The UI was constructed using **Stitch MCP** and **Antigravity**. Stitch MCP provided a pipeline to high-fidelity design assets -- layout configurations, structural models, and a dark industrial "construction" design system. Antigravity consumed these visual directives and translated them into production code.
-
-## Future Plans
-
-- **Live Video Overlays**: Implement real-time AR bounding boxes and structural edge detection overlaid directly on the live camera viewfinder via Canvas/WebRTC to dynamically highlight and track likely defects as the user scans the room.
+- React 19
+- TypeScript
+- Vite
+- Zustand
+- `@google/genai`
+- Framer Motion
 
 ## Getting Started
 
-1. Clone the repository.
-2. `npm install`
-3. Copy `.env.example` to `.env` and add your Gemini API key:
-   ```
-   VITE_GEMINI_API_KEY=your_key_here
-   ```
-   Optional model overrides:
-   ```
-   VITE_GEMINI_FAST_VISION_MODEL=gemini-2.5-flash
-   VITE_GEMINI_FAST_VISION_MODELS=gemini-2.5-flash,gemini-2.5-flash-lite
-   VITE_GEMINI_AGENTIC_VISION_MODEL=gemini-3-flash-preview
-   VITE_GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
-   VITE_GEMINI_LIVE_MODELS=gemini-2.5-flash-native-audio-preview-12-2025,gemini-2.5-flash-native-audio-preview-09-2025
-   VITE_GEMINI_REPORT_MODEL=gemini-2.5-flash
-   ```
-4. `npm run dev`
-5. Open `http://localhost:5173`.
+### Prerequisites
+
+- Node.js 22 or newer
+- npm
+- A Gemini API key if you want live AI features
+
+### 1. Install dependencies
+
+Windows PowerShell:
+
+```powershell
+npm.cmd install
+```
+
+macOS / Linux:
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then set at least:
+
+```env
+VITE_GEMINI_API_KEY=your_key_here
+```
+
+Supported overrides today:
+
+```env
+VITE_GEMINI_FAST_VISION_MODELS=gemini-2.5-flash,gemini-2.5-flash-lite
+VITE_GEMINI_AGENTIC_VISION_MODEL=gemini-3-flash-preview
+VITE_GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
+VITE_GEMINI_LIVE_MODELS=gemini-2.5-flash-native-audio-preview-12-2025,gemini-2.5-flash-native-audio-preview-09-2025
+VITE_GEMINI_VOICE_NAME=Kore
+```
+
+Notes:
+
+- You can also paste a Gemini API key into the in-app API config panel. It is stored in the browser only.
+- Without an API key, the app still runs, but vision, live audio, and report generation fall back to reduced offline behavior.
+
+### 3. Start the app
+
+Windows PowerShell:
+
+```powershell
+npm.cmd run dev
+```
+
+macOS / Linux:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+### 4. Run checks
+
+Windows PowerShell:
+
+```powershell
+npm.cmd run build
+npm.cmd run lint
+npm.cmd run test:vision-harness
+```
+
+## Optional YOLO HUD Setup
+
+The repository is deployable without YOLO. By default, the HUD uses the canvas detector and only attempts YOLO when all of the following are true:
+
+- `VITE_ENABLE_YOLO_HUD=true`
+- `@tensorflow/tfjs` is installed
+- `public/models/yolo11n-conquas/model.json` and its related model files are present
+
+If any of those are missing, the app falls back to the canvas detector automatically. This is the intended default for Vercel deployment.
+
+## Runtime Behavior
+
+### Vision pipeline
+
+- Fast pass: Gemini vision classification with model fallback.
+- Agentic pass: optional second-pass verification with code execution.
+- Measurement mode: requests structured numeric measurement output.
+- App-side CONQUAS logic computes PASS/FAIL from returned measurements instead of relying only on prompt wording.
+
+### Live API
+
+- Native-audio live models are tried first by default.
+- If a configured live model is text-only, the app downgrades the session config accordingly.
+- API keys can come from `VITE_GEMINI_API_KEY` or browser local storage through the in-app config panel.
+
+### HUD
+
+- Vision mode supports manual ROI review and auto-detection.
+- Acoustic mode supports tap-to-location checks for hollow tiles.
+- Detector state is ephemeral and does not persist between sessions.
 
 ## Deployment
 
-1. `npm run build` must pass.
-2. Deploy to Vercel.
-3. Set `VITE_GEMINI_API_KEY`, `VITE_GEMINI_LIVE_MODEL`, `VITE_GEMINI_LIVE_MODELS`, and `VITE_GEMINI_VOICE_NAME` in Vercel Environment Variables.
+The default app is suitable for Vercel as a static client deployment.
 
-## Vision Flow
+### Before deploying
 
-- Normal `Analyze Evidence` uses a fast-pass Gemini vision call with a model fallback chain. By default it tries `gemini-2.5-flash` first, then `gemini-2.5-flash-lite`.
-- `Measure & Analyze` uses the same fast pass first, then may run a second-pass agentic verification on `gemini-3-flash-preview`.
-- The agentic pass uses Gemini code execution with minimal thinking for deterministic verification and coin-referenced measurement.
-- The agentic pass is used to verify ambiguous defects, cross-check severity, tighten bbox localization, and return structured measurement output when the first pass is not sufficient on its own.
-- Measure mode can be enabled before or after capture; the current analyze action uses the toggle state shown on screen at click time.
-- Fast vision fallbacks all use the same JSON-output `generateContent` shape. If you want to try a newer lite model such as `gemini-3.1-flash-lite-preview`, add it explicitly to `VITE_GEMINI_FAST_VISION_MODELS` after validating availability in your account.
+- `npm.cmd run build` should pass
+- `npm.cmd run lint` should pass
+- `npm.cmd run test:vision-harness` should pass
 
-## Live Model Fallbacks
+### Vercel environment variables
 
-- Live voice sessions default to a native-audio chain: `gemini-2.5-flash-native-audio-preview-12-2025`, then `gemini-2.5-flash-native-audio-preview-09-2025`.
-- Native-audio models are connected with `responseModalities: [AUDIO]`, `outputAudioTranscription`, `speechConfig`, and function tools.
-- If you explicitly configure a non-native live model in `VITE_GEMINI_LIVE_MODELS`, the app downgrades that candidate to `responseModalities: [TEXT]` instead of incorrectly forcing audio parameters onto it.
-- `flash-lite` is not used as an automatic Live fallback because Google does not document it as a Live API audio model.
+Set these as needed:
 
-## Debug Logging
+```env
+VITE_GEMINI_API_KEY=
+VITE_GEMINI_FAST_VISION_MODELS=
+VITE_GEMINI_AGENTIC_VISION_MODEL=
+VITE_GEMINI_LIVE_MODEL=
+VITE_GEMINI_LIVE_MODELS=
+VITE_GEMINI_VOICE_NAME=
+VITE_ENABLE_YOLO_HUD=
+```
 
-Vision runs emit console logs in DevTools:
+### Recommended Vercel posture
 
-- `[camera:analyze]`
+- Leave `VITE_ENABLE_YOLO_HUD` unset unless you are also deploying TF.js and model assets.
+- Treat YOLO as an optional feature flag, not a required runtime dependency.
+- Use the default canvas detector for the safest deploy path.
+
+## Project Scripts
+
+- `npm.cmd run dev`: start the Vite dev server
+- `npm.cmd run build`: TypeScript build check and production bundle
+- `npm.cmd run lint`: ESLint
+- `npm.cmd run preview`: preview the production build locally
+- `npm.cmd run test:vision-harness`: run the lightweight vision harness
+
+## Repository Layout
+
+```text
+src/
+  components/bto/
+  hooks/
+  lib/
+    vision/
+public/
+scripts/
+```
+
+Key entry files:
+
+- `src/main.tsx`
+- `src/App.tsx`
+- `src/BtoApp.tsx`
+
+## Debugging
+
+The app emits structured console logs for vision and live workflows, including:
+
 - `[vision:fast-pass-start]`
 - `[vision:fast-pass-success]`
 - `[vision:model-fallback]`
 - `[vision:agentic-pass-start]`
 - `[vision:agentic-pass-success]`
-- `[vision:fast-pass] failure`
-- `[vision:agentic-pass] failure`
-- `[vision:vision-fallback] failure`
 - `[live:connect-start]`
 - `[live:connect-success]`
 - `[live:model-fallback]`
-- `[live:connect] failure`
 
-These logs include room, model, mode, timing, and normalized Gemini error details so API failures can be diagnosed without guessing.
+These are useful when validating model fallback behavior, timeout handling, and Live API connection issues.
 
-## Graceful Degradation
+## Notes
 
-Gemini calls are wrapped with fallback behavior, but the timeout budget now differs by workflow:
-
-- standard vision: longer fast-pass timeout for image analysis
-- measure mode: longer timeout for measurement-heavy calls
-- report generation: separate timeout and retry budget from vision
-
-If Gemini is unreachable or too slow, fallback defects/reports are still logged and marked for manual review instead of leaving the UI stuck.
+- This repository currently ships without TensorFlow.js or YOLO model assets.
+- Browser support matters for camera, microphone, and canvas/HUD features.
+- The production build currently emits a Vite large-chunk warning for the main app bundle, but the app builds successfully.

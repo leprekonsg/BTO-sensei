@@ -1,5 +1,6 @@
 import { withRetryAndFallback, GEMINI_SUMMARY_RETRY } from "./fallback";
 import { getGeminiClient } from "../hooks/use-bto-config";
+import { lookupConquasItemId, lookupConquasAppendix, buildConquasPromptBlock } from "./conquas";
 import { getRoomCenters } from "./room-geometry";
 import type {
   BlueprintCoord,
@@ -75,6 +76,7 @@ const reportResponseSchema = {
       },
     },
     inspector_note: { type: "string" },
+    conquas_grade: { type: "string", enum: ["Pass", "Fail", "Conditional"] },
   },
 };
 
@@ -126,7 +128,10 @@ function formatDefectForReport(defect: Defect, index: number): string {
   const confidence = Number.isFinite(defect.confidence) ? ` Confidence ${Math.round(defect.confidence * 100)}%.` : "";
   const verifyTag = defect.review_required ? " VERIFY ON SITE." : "";
   const rationale = defect.severity_rationale ? ` Rationale: ${defect.severity_rationale}` : "";
-  return `${index + 1}. [${defect.room}] ${defect.defect_type} (${defect.severity}) - ${defect.description}.${confidence}${verifyTag}${rationale}`;
+  const conquasRef = defect.conquas_appendix
+    ? ` [CONQUAS: ${defect.conquas_appendix}, Item ${defect.conquas_item_id}]`
+    : "";
+  return `${index + 1}. [${defect.room}] ${defect.defect_type} (${defect.severity}) - ${defect.description}.${confidence}${verifyTag}${rationale}${conquasRef}`;
 }
 
 function hydratePriorityDefects(priorityDefects: Defect[] | undefined, defects: Defect[]): Defect[] {
@@ -141,13 +146,32 @@ function hydratePriorityDefects(priorityDefects: Defect[] | undefined, defects: 
   });
 }
 
+/** Compute CONQUAS grade based on defect severity distribution */
+function computeConquasGrade(defects: Defect[]): "Pass" | "Fail" | "Conditional" {
+  const criticalCount = defects.filter((d) => d.severity === "Critical").length;
+  const moderateCount = defects.filter((d) => d.severity === "Moderate").length;
+  if (criticalCount > 0) return "Fail";
+  if (moderateCount > 3) return "Conditional";
+  return "Pass";
+}
+
+/** Enrich a defect with CONQUAS item ID and appendix if not already set */
+export function enrichDefectWithConquas(defect: Defect): Defect {
+  if (defect.conquas_item_id) return defect;
+  const itemId = lookupConquasItemId(defect.defect_type);
+  const appendix = lookupConquasAppendix(defect.defect_type);
+  if (!itemId) return defect;
+  return { ...defect, conquas_item_id: itemId, conquas_appendix: appendix };
+}
+
 /** Local fallback report generation (no AI dependency) */
 export function generateLocalReport(
   defects: Defect[],
   flatId: string,
   inspectionDate: string,
 ): InspectionReport {
-  const roomScores = localRoomScores(defects);
+  const enriched = defects.map(enrichDefectWithConquas);
+  const roomScores = localRoomScores(enriched);
   const avg = roomScores.reduce((t, r) => t + r.score, 0) / roomScores.length;
 
   return {
@@ -155,11 +179,12 @@ export function generateLocalReport(
     inspection_date: inspectionDate,
     overall_health_score: Math.round(avg),
     room_scores: roomScores,
-    priority_defects: localPriorityDefects(defects),
-    inspector_note: defects.length
-      ? countVerifyOnSite(defects) > 0
-        ? `Most issues are serviceable within the defect liability window. Clear the critical items first, and verify ${countVerifyOnSite(defects)} item${countVerifyOnSite(defects) === 1 ? "" : "s"} on site before submission.`
-        : "Most issues are serviceable within the defect liability window. Clear the critical items first."
+    priority_defects: localPriorityDefects(enriched),
+    conquas_grade: computeConquasGrade(enriched),
+    inspector_note: enriched.length
+      ? countVerifyOnSite(enriched) > 0
+        ? `Most issues are serviceable within the defect liability window. Clear the critical items first, and verify ${countVerifyOnSite(enriched)} item${countVerifyOnSite(enriched) === 1 ? "" : "s"} on site before submission. CONQUAS grade: ${computeConquasGrade(enriched)}.`
+        : `Most issues are serviceable within the defect liability window. Clear the critical items first. CONQUAS grade: ${computeConquasGrade(enriched)}.`
       : "No significant defects logged yet. Continue inspecting room by room.",
   };
 }
@@ -175,39 +200,44 @@ export async function generateInspectionReport(
     return generateLocalReport(defects, flatId, inspectionDate);
   }
 
-  const defectSummary = defects.map((defect, index) => formatDefectForReport(defect, index)).join("\n");
+  const defectSummary = defects.map((defect, index) => formatDefectForReport(enrichDefectWithConquas(defect), index)).join("\n");
   const verifyOnSiteCount = countVerifyOnSite(defects);
 
-  const prompt = `You are Ah Seng, a veteran BTO flat inspector in Singapore. Generate a structured inspection report.
+  const prompt = `You are Ah Seng, a veteran BTO flat inspector in Singapore and a Digital CONQUAS Assessor. Generate a structured CONQUAS-ready inspection report.
 
 Flat ID: ${flatId}
 Inspection Date: ${inspectionDate}
 Total Defects Found: ${defects.length}
 
+${buildConquasPromptBlock()}
+
 Defect Log:
 ${defectSummary || "No defects logged."}
 
-Based on the defects, generate a JSON report with this exact structure:
+Based on the defects and CONQUAS 2022 R2 tolerances, generate a JSON report with this exact structure:
 {
   "flat_id": "${flatId}",
   "inspection_date": "${inspectionDate}",
   "overall_health_score": <number 0-100>,
   "room_scores": [
-    { "room": "<room name>", "score": <number 0-100>, "summary": "<brief assessment>" }
+    { "room": "<room name>", "score": <number 0-100>, "summary": "<brief assessment referencing CONQUAS standards>" }
   ],
   "priority_defects": [<top 5 defect objects from the log, keeping all fields>],
-  "inspector_note": "<Ah Seng's overall assessment in Singlish, practical and direct>"
+  "inspector_note": "<Ah Seng's overall assessment in Singlish, referencing CONQUAS grade>",
+  "conquas_grade": "Pass" | "Fail" | "Conditional"
 }
 
 Rules:
-- Score rooms based on HDB defect liability standards
-- Critical defects drop room score by 20-25 points
+- Score rooms based on CONQUAS 2022 R2 tolerance thresholds
+- Critical defects (exceeding CONQUAS limits) drop room score by 20-25 points
 - Moderate defects drop by 10-15 points
 - Minor defects drop by 5-8 points
 - Rooms with no defects score 90-100
 - Overall score is weighted average of room scores
-- Inspector note should be in Singlish, practical, and mention the most important items
+- CONQUAS grade: "Fail" if any Critical defects, "Conditional" if >3 Moderate, else "Pass"
+- Inspector note should be in Singlish, include the CONQUAS grade, and mention the most important items
 - If any defect is marked "VERIFY ON SITE", explicitly mention those manual-check items in the inspector note
+- For each priority_defect, include conquas_item_id and conquas_appendix fields if applicable
 - Preserve fields such as severity_rationale, review_required, bbox, and measurement when copying priority_defects from the log
 - Include ALL rooms from: ${ROOMS.join(", ")}
 
@@ -236,7 +266,8 @@ Return ONLY valid JSON, no markdown fences.`;
     inspection_date: parsed.inspection_date || inspectionDate,
     overall_health_score: parsed.overall_health_score,
     room_scores: parsed.room_scores,
-    priority_defects: hydratePriorityDefects(parsed.priority_defects, defects),
+    priority_defects: hydratePriorityDefects(parsed.priority_defects, defects).map(enrichDefectWithConquas),
+    conquas_grade: parsed.conquas_grade || computeConquasGrade(defects),
     inspector_note: parsed.inspector_note || (
       verifyOnSiteCount > 0
         ? `Report generated by AI. Verify ${verifyOnSiteCount} item${verifyOnSiteCount === 1 ? "" : "s"} on site before submission.`
@@ -273,15 +304,16 @@ export async function generateCoverSummary(
     return generateLocalCoverSummary(report, flatType);
   }
 
-  const prompt = `You are Ah Seng, a veteran BTO inspector in Singapore. Write a 2-3 sentence executive summary for the cover page of an HDB ${flatType} flat inspection report.
+  const prompt = `You are Ah Seng, a veteran BTO inspector in Singapore. Write a 2-3 sentence executive summary for the cover page of an HDB ${flatType} flat inspection report. This is a CONQUAS-Ready report.
 
 Flat ID: ${report.flat_id}
 Date: ${report.inspection_date}
 Overall Score: ${report.overall_health_score}/100
+CONQUAS Grade: ${report.conquas_grade ?? "N/A"}
 Total Defects: ${report.priority_defects.length}
 Critical Issues: ${report.priority_defects.filter(d => d.severity === "Critical").length}
 
-Write in professional English (not Singlish). Be concise and authoritative. Return ONLY the summary text, no JSON.`;
+Write in professional English (not Singlish). Reference the CONQUAS 2022 R2 grade. Be concise and authoritative. Return ONLY the summary text, no JSON.`;
 
   const fallback = generateLocalCoverSummary(report, flatType);
   const result = await withRetryAndFallback(
@@ -307,8 +339,9 @@ export function generateLocalCoverSummary(report: InspectionReport, flatType: Fl
   const criticalCount = report.priority_defects.filter(d => d.severity === "Critical").length;
   const score = report.overall_health_score;
   const verdict = score >= 85 ? "excellent" : score >= 70 ? "acceptable" : "below standard";
+  const grade = report.conquas_grade ?? "N/A";
 
-  return `This ${flatType} HDB unit (${report.flat_id}) achieved a structural integrity score of ${score}/100, rated ${verdict}. ${
+  return `This ${flatType} HDB unit (${report.flat_id}) achieved a structural integrity score of ${score}/100, rated ${verdict}. CONQUAS 2022 R2 assessment grade: ${grade}. ${
     criticalCount > 0
       ? `${criticalCount} critical defect${criticalCount > 1 ? "s" : ""} require${criticalCount === 1 ? "s" : ""} immediate contractor attention before handover acceptance.`
       : "No critical defects were identified during this inspection cycle."

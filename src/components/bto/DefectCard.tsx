@@ -1,4 +1,4 @@
-import type { Defect } from "../../lib/types";
+import type { Defect, DefectSource } from "../../lib/types";
 import "./DefectCard.css";
 
 interface DefectCardProps {
@@ -15,6 +15,18 @@ const SEVERITY_WIDTH: Record<string, string> = {
     Critical: "90%",
     Moderate: "45%",
     Minor: "20%",
+};
+
+const SOURCE_LABELS: Record<DefectSource, string> = {
+    "hud-vision": "HUD Vision",
+    "acoustic": "Acoustic",
+    "manual-vision": "Camera",
+};
+
+const SOURCE_ICONS: Record<DefectSource, string> = {
+    "hud-vision": "visibility",
+    "acoustic": "graphic_eq",
+    "manual-vision": "photo_camera",
 };
 
 export function DefectCard({ defect }: DefectCardProps) {
@@ -38,7 +50,17 @@ export function DefectCard({ defect }: DefectCardProps) {
             <div className="defect-info">
                 <div className="defect-header">
                     <span className="defect-type">{defect.defect_type}</span>
-                    <span className="defect-id font-mono">{defect.room}</span>
+                    <div className="defect-header-meta">
+                        {defect.source && (
+                            <span className={`defect-source defect-source--${defect.source}`}>
+                                <span className="material-symbols-outlined" style={{ fontSize: 10 }}>
+                                    {SOURCE_ICONS[defect.source] ?? "info"}
+                                </span>
+                                {SOURCE_LABELS[defect.source] ?? defect.source}
+                            </span>
+                        )}
+                        <span className="defect-id font-mono">{defect.room}</span>
+                    </div>
                 </div>
                 <div className="defect-severity-row">
                     <span className="defect-severity-label">Severity</span>
@@ -58,6 +80,12 @@ export function DefectCard({ defect }: DefectCardProps) {
                 {defect.severity_rationale && (
                     <div className="defect-rationale" title={defect.severity_rationale}>
                         {defect.severity_rationale}
+                    </div>
+                )}
+                {defect.conquas_appendix && (
+                    <div className="defect-conquas-ref">
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>verified</span>
+                        <span>{defect.conquas_appendix}</span>
                     </div>
                 )}
                 {defect.measurement && (

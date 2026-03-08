@@ -1,4 +1,9 @@
-import type { Defect, Severity } from "./types";
+import {
+  assessConquasCompliance,
+  lookupConquasAppendix,
+  lookupConquasItemId,
+} from "./conquas.ts";
+import type { Defect, Measurement, Severity } from "./types";
 
 export interface VisionLikeResponse {
   defect_type?: string;
@@ -47,13 +52,102 @@ export function needsAgenticPass(defect: Defect, measureMode: boolean): boolean 
   return defect.confidence < 0.6 || measureMode || ((/crack|seepage|leak|water/i.test(typeLower)) && defect.severity === "Minor");
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+export function normalizeMeasurement(
+  measurement?: Partial<Measurement> | null,
+): Measurement | undefined {
+  if (!measurement || typeof measurement !== "object") {
+    return undefined;
+  }
+
+  const normalized: Measurement = {
+    reference_object:
+      typeof measurement.reference_object === "string" &&
+      measurement.reference_object.trim().length > 0
+        ? measurement.reference_object
+        : "Unknown reference",
+    notes: typeof measurement.notes === "string" ? measurement.notes : "",
+  };
+
+  const widthMm = toFiniteNumber(measurement.width_mm);
+  if (widthMm !== undefined) normalized.width_mm = widthMm;
+
+  const lengthMm = toFiniteNumber(measurement.length_mm);
+  if (lengthMm !== undefined) normalized.length_mm = lengthMm;
+
+  if (typeof measurement.depth_mm === "string" && measurement.depth_mm.trim().length > 0) {
+    normalized.depth_mm = measurement.depth_mm;
+  }
+
+  const gapMm = toFiniteNumber(measurement.gap_mm);
+  if (gapMm !== undefined) normalized.gap_mm = gapMm;
+
+  const lippageMm = toFiniteNumber(measurement.lippage_mm);
+  if (lippageMm !== undefined) normalized.lippage_mm = lippageMm;
+
+  const verticalityMmPerM = toFiniteNumber(measurement.verticality_mm_per_m);
+  if (verticalityMmPerM !== undefined) {
+    normalized.verticality_mm_per_m = verticalityMmPerM;
+  }
+
+  const surfaceEvennessMm = toFiniteNumber(measurement.surface_evenness_mm);
+  if (surfaceEvennessMm !== undefined) {
+    normalized.surface_evenness_mm = surfaceEvennessMm;
+  }
+
+  return normalized;
+}
+
+function appendRationale(existing: string | undefined, addition: string): string {
+  if (!existing) return addition;
+  if (existing.includes(addition)) return existing;
+  return `${existing} ${addition}`;
+}
+
 export function validateSeverity(defect: Defect): Defect {
   const next: Defect = {
     ...defect,
     bbox: clampBBox(defect.bbox),
+    measurement: normalizeMeasurement(defect.measurement),
+    conquas_item_id:
+      defect.conquas_item_id ?? lookupConquasItemId(defect.defect_type),
+    conquas_appendix:
+      defect.conquas_appendix ?? lookupConquasAppendix(defect.defect_type),
   };
   const typeLower = next.defect_type.toLowerCase();
   const descLower = next.description.toLowerCase();
+  const assessment = assessConquasCompliance(next.defect_type, next.measurement);
+
+  if (assessment) {
+    next.conquas_item_id = assessment.itemId;
+    next.conquas_appendix = assessment.appendix;
+    next.conquas_verdict = assessment.verdict;
+    next.severity_rationale = appendRationale(
+      next.severity_rationale,
+      assessment.summary,
+    );
+
+    if (assessment.verdict === "FAIL") {
+      next.review_required = true;
+      if (next.severity === "Minor") {
+        next.severity = "Moderate";
+      }
+    }
+  }
 
   if (/water|seepage|leak/i.test(typeLower) && next.severity !== "Critical") {
     next.severity = "Critical";

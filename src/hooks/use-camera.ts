@@ -7,6 +7,7 @@ import {
   clampBBox,
   mergeVisionUpdate,
   needsAgenticPass,
+  normalizeMeasurement,
   normalizeSeverity,
   validateSeverity,
   type VisionLikeResponse,
@@ -14,7 +15,7 @@ import {
 import { buildModelCandidates, shouldTryModelFallback } from "../lib/gemini-models";
 import { sendVisionToSession } from "../lib/gemini-prompts";
 import { useBTOStore } from "../lib/store";
-import type { Defect, Measurement, Severity, UseCameraReturn } from "../lib/types";
+import type { Defect, DefectSource, Measurement, Severity, UseCameraReturn } from "../lib/types";
 
 const FAST_VISION_MODELS = buildModelCandidates(
   import.meta.env?.VITE_GEMINI_FAST_VISION_MODELS as string | undefined,
@@ -30,13 +31,19 @@ const MEASURE_VISION_TIMEOUT_MS = 45000;
 const AGENTIC_TIMEOUT_MS = 12000;
 const AGENTIC_MEASURE_TIMEOUT_MS = 20000;
 
+import { buildConquasPromptBlock, lookupConquasItemId, lookupConquasAppendix } from "../lib/conquas";
+
 const CONQUAS_SEVERITY_PROMPT = `SEVERITY CLASSIFICATION (BCA CONQUAS):
 - Critical: Water seepage/leakage, broken glass, structural cracks >0.3mm or >300mm,
   non-functional doors/windows/locks, waterproofing failure, electrical hazard, FCU leak.
 - Moderate: Hollow tiles, hairline cracks >50mm, paint spalling >50mm, misaligned frames >3mm,
   chipped tile edges, loose fittings.
 - Minor: Cosmetic scratches, small paint blemishes <50mm, tonality differences, minor alignment,
-  removable stains, scuff marks.`;
+  removable stains, scuff marks.
+
+${buildConquasPromptBlock()}
+
+When a defect exceeds a CONQUAS tolerance, cite the specific Item ID (e.g. "Appendix 1, Item 1c-5") in severity_rationale.`;
 
 interface VisionResponse extends VisionLikeResponse {
   defect_type: string;
@@ -47,6 +54,19 @@ interface VisionResponse extends VisionLikeResponse {
   confidence: number;
   bbox?: [number, number, number, number] | null;
   measurement?: Measurement;
+}
+
+interface AgenticContext {
+  mimeType: string;
+  base64Data: string;
+}
+
+interface VisionAnalysisOptions {
+  frameUrl: string;
+  prompt?: string;
+  measureMode?: boolean;
+  source: DefectSource;
+  contextLabel: "still" | "hud";
 }
 
 function toLoggableError(error: unknown) {
@@ -199,8 +219,13 @@ ${CONQUAS_SEVERITY_PROMPT}
 
 ${measureMode
       ? `MEASUREMENT MODE:
-- A Singapore 50-cent coin (24.66mm diameter) should be visible as the scale reference.
-- Use code execution to inspect the image, zoom into the defect, and estimate width/length using the coin when possible.`
+- A Singapore 10-cent coin (18.5mm diameter) should be visible as the scale reference.
+- Use code execution to inspect the image, zoom into the defect, and estimate width/length using the coin when possible.
+- Return raw numeric measurements when visible so the app can evaluate CONQUAS compliance.
+- For door/window gaps, populate gap_mm.
+- For tile lippage, populate lippage_mm.
+- For wall/frame verticality, populate verticality_mm_per_m.
+- For surface evenness, populate surface_evenness_mm.`
       : "Use code execution to analyze the image if helpful (e.g. measure crack width relative to reference objects, check color distribution for water stains)."}
 Then provide your final verified assessment.
 
@@ -217,8 +242,12 @@ Return ONLY valid JSON:
     "width_mm": <estimated width in mm>,
     "length_mm": <estimated length in mm>,
     "depth_mm": "<estimated depth description>",
-    "reference_object": "SG 50-cent coin (24.66mm)",
-    "notes": "<measurement notes>"
+    "reference_object": "SG 10-cent coin (18.5mm)",
+    "notes": "<measurement notes>",
+    "gap_mm": <number or null>,
+    "lippage_mm": <number or null>,
+    "verticality_mm_per_m": <number or null>,
+    "surface_evenness_mm": <number or null>
   }` : ""}
 }`;
 
@@ -294,6 +323,68 @@ function nextId() {
   return `defect-${Date.now()}`;
 }
 
+function parseDataUrl(frameUrl: string): AgenticContext | null {
+  const match = frameUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return {
+    mimeType: match[1],
+    base64Data: match[2],
+  };
+}
+
+function buildVisionPrompt(
+  room: string,
+  prompt: string,
+  measureMode: boolean,
+  contextLabel: VisionAnalysisOptions["contextLabel"],
+) {
+  const measurementInstructions = measureMode
+    ? `\n\nMEASUREMENT MODE: A Singapore 10-cent coin (18.5mm diameter) should be visible as a size reference.
+Estimate the physical dimensions of the defect relative to the coin.
+Return raw numeric measurements when visible so the app can evaluate CONQUAS compliance.
+For door/window gaps, populate gap_mm.
+For tile lippage, populate lippage_mm.
+For wall/frame verticality, populate verticality_mm_per_m.
+For surface evenness, populate surface_evenness_mm.
+Include a "measurement" field in your response:
+{
+  "measurement": {
+    "width_mm": <estimated width in mm>,
+    "length_mm": <estimated length in mm>,
+    "depth_mm": "<estimated depth description, e.g. 'surface-level' or '~2mm'>",
+    "reference_object": "SG 10-cent coin (18.5mm)",
+    "notes": "<measurement notes>",
+    "gap_mm": <number or null>,
+    "lippage_mm": <number or null>,
+    "verticality_mm_per_m": <number or null>,
+    "surface_evenness_mm": <number or null>
+  }
+}`
+    : "";
+
+  const contextInstruction = contextLabel === "hud"
+    ? "Analyze this cropped ROI from the live heads-up HUD camera feed."
+    : "Analyze this photo from the inspection capture flow.";
+
+  return `You are Ah Seng, a veteran Singapore BTO flat inspector. ${contextInstruction} The evidence is from the ${room}.
+${prompt ? `User note: ${prompt}` : ""}
+
+${CONQUAS_SEVERITY_PROMPT}
+
+Return a JSON object with:
+{
+  "defect_type": "type of defect found (e.g. Wall crack, Hollow tile, Water stain, Paint defect, Chipped edge)",
+  "severity": "Minor" | "Moderate" | "Critical",
+  "severity_rationale": "one-line reason referencing the criteria above",
+  "description": "brief description of what you see",
+  "recommendation": "what the homeowner should do",
+  "confidence": <number 0.0 to 1.0>,
+  "bbox": [ymin, xmin, ymax, xmax] // normalized 0-1000, or null${measureMode ? ',\n  "measurement": { ... }' : ""}
+}${measurementInstructions}
+
+If no defect is visible, still return your best assessment. Return ONLY valid JSON.`;
+}
+
 /** Wait until video element reports non-zero dimensions (metadata loaded). */
 function waitForVideoReady(video: HTMLVideoElement, timeoutMs = 3000): Promise<void> {
   if (video.videoWidth > 0) return Promise.resolve();
@@ -363,21 +454,28 @@ export function useCamera(): UseCameraReturn {
     setStreamActive(false);
   }, []);
 
+  const stopStream = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setStreamActive(false);
+  }, []);
+
   // Auto-start camera on mount
   useEffect(() => {
-    startStream();
+    const timer = window.setTimeout(() => {
+      void startStream();
+    }, 0);
     return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.srcObject = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      setStreamActive(false);
+      window.clearTimeout(timer);
+      stopStream();
     };
-  }, [startStream]);
+  }, [startStream, stopStream]);
 
   async function captureFrame() {
     // If the stream isn't active, try to start it first
@@ -416,12 +514,66 @@ export function useCamera(): UseCameraReturn {
     return dataUrl;
   }
 
-  async function sendToVision(frameUrl: string, prompt = "", measureMode = false) {
-    const fallback = FALLBACKS.vision(currentRoom, frameUrl);
-    const base64Match = frameUrl.match(/^data:([^;]+);base64,(.+)$/);
-    const agenticContext = base64Match
-      ? { mimeType: base64Match[1], base64Data: base64Match[2] }
-      : null;
+  async function cropHudRegion(bbox: [number, number, number, number]) {
+    if (!streamRef.current) {
+      await startStream();
+    }
+
+    const video = videoRef.current;
+    if (video && video.videoWidth === 0) {
+      await waitForVideoReady(video, 2000);
+    }
+
+    if (!video || video.videoWidth === 0) {
+      return captureFrame();
+    }
+
+    const normalized = clampBBox(bbox) ?? bbox;
+    const [yMin, xMin, yMax, xMax] = normalized;
+    const srcWidth = video.videoWidth;
+    const srcHeight = video.videoHeight;
+    const boxWidth = ((xMax - xMin) / 1000) * srcWidth;
+    const boxHeight = ((yMax - yMin) / 1000) * srcHeight;
+    const padX = Math.max(24, Math.round(boxWidth * 0.18));
+    const padY = Math.max(24, Math.round(boxHeight * 0.18));
+    const sourceX = Math.max(0, Math.round((xMin / 1000) * srcWidth) - padX);
+    const sourceY = Math.max(0, Math.round((yMin / 1000) * srcHeight) - padY);
+    const sourceWidth = Math.min(srcWidth - sourceX, Math.round(boxWidth) + padX * 2);
+    const sourceHeight = Math.min(srcHeight - sourceY, Math.round(boxHeight) + padY * 2);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable");
+
+    ctx.drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight,
+    );
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+
+  async function runVisionAnalysis({
+    frameUrl,
+    prompt = "",
+    measureMode = false,
+    source,
+    contextLabel,
+  }: VisionAnalysisOptions): Promise<Defect> {
+    const fallback = {
+      ...FALLBACKS.vision(currentRoom, frameUrl),
+      source,
+      evidence_thumbnail: contextLabel === "hud" ? frameUrl : undefined,
+    } satisfies Defect;
+    const agenticContext = parseDataUrl(frameUrl);
     const startedAt = performance.now();
 
     const result = await withRetryAndFallback(
@@ -435,42 +587,11 @@ export function useCamera(): UseCameraReturn {
         }
 
         if (!agenticContext) {
-          return inferDefectLocal(prompt, currentRoom, frameUrl, measureMode);
+          return inferDefectLocal(prompt, currentRoom, frameUrl, measureMode, source);
         }
 
         const { mimeType, base64Data } = agenticContext;
-        const measurementInstructions = measureMode
-          ? `\n\nMEASUREMENT MODE: A Singapore 50-cent coin (24.66mm diameter) should be visible as a size reference.
-Estimate the physical dimensions of the defect relative to the coin.
-Include a "measurement" field in your response:
-{
-  "measurement": {
-    "width_mm": <estimated width in mm>,
-    "length_mm": <estimated length in mm>,
-    "depth_mm": "<estimated depth description, e.g. 'surface-level' or '~2mm'>",
-    "reference_object": "SG 50-cent coin (24.66mm)",
-    "notes": "<any measurement notes>"
-  }
-}`
-          : "";
-
-        const visionPrompt = `You are Ah Seng, a veteran Singapore BTO flat inspector. Analyze this photo from the ${currentRoom} for construction defects.
-${prompt ? `User note: ${prompt}` : ""}
-
-${CONQUAS_SEVERITY_PROMPT}
-
-Return a JSON object with:
-{
-  "defect_type": "type of defect found (e.g. Wall crack, Hollow tile, Water stain, Paint defect, Chipped edge)",
-  "severity": "Minor" | "Moderate" | "Critical",
-  "severity_rationale": "one-line reason referencing the criteria above",
-  "description": "brief description of what you see",
-  "recommendation": "what the homeowner should do",
-  "confidence": <number 0.0 to 1.0>,
-  "bbox": [ymin, xmin, ymax, xmax] // normalized 0-1000, or null${measureMode ? ',\n  "measurement": { ... }' : ""}
-}${measurementInstructions}
-
-If no defect is visible, still return your best assessment. Return ONLY valid JSON.`;
+        const visionPrompt = buildVisionPrompt(currentRoom, prompt, measureMode, contextLabel);
 
         const { model: selectedFastVisionModel, response } = await runFastVisionPass(
           client,
@@ -488,7 +609,7 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
         const parsed = JSON.parse(text) as VisionResponse;
         const parsedSeverity = normalizeSeverity(parsed.severity);
 
-        let defect: Defect = {
+        const defect: Defect = {
           id: nextId(),
           room: currentRoom,
           defect_type: parsed.defect_type || "Unclassified defect",
@@ -498,15 +619,20 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
           confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.7,
           photo_url: frameUrl,
           timestamp: Date.now(),
+          source,
+          evidence_thumbnail: contextLabel === "hud" ? frameUrl : undefined,
           severity_rationale: parsedSeverity
             ? parsed.severity_rationale || undefined
             : buildInvalidSeverityRationale("Fast pass", parsed.severity_rationale),
           review_required: parsedSeverity ? undefined : true,
           bbox: clampBBox(parsed.bbox),
+          conquas_item_id: lookupConquasItemId(parsed.defect_type || ""),
+          conquas_appendix: lookupConquasAppendix(parsed.defect_type || ""),
         };
 
-        if (parsed.measurement) {
-          defect.measurement = parsed.measurement;
+        const measurement = normalizeMeasurement(parsed.measurement);
+        if (measurement) {
+          defect.measurement = measurement;
         }
 
         logVisionInfo("fast-pass-success", {
@@ -529,8 +655,12 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
       ? ` (~${result.data.measurement.width_mm ?? "?"}mm x ${result.data.measurement.length_mm ?? "?"}mm)`
       : "";
     const fallbackMessage = result.error?.toLowerCase().includes("api key")
-      ? "No Gemini API key configured, so I logged an offline fallback defect for manual verification."
-      : "Vision service dropped, but I logged a fallback defect for follow-up.";
+      ? contextLabel === "hud"
+        ? "No Gemini API key configured, so the HUD marker was logged with offline fallback data."
+        : "No Gemini API key configured, so I logged an offline fallback defect for manual verification."
+      : contextLabel === "hud"
+        ? "HUD ROI analysis failed, but the marker was logged for follow-up."
+        : "Vision service dropped, but I logged a fallback defect for follow-up.";
     if (result.error) {
       logVisionFailure("vision-fallback", {
         room: currentRoom,
@@ -542,7 +672,9 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
     setInspectorMessage(
       result.error
         ? fallbackMessage
-        : `${result.data.defect_type}${measureInfo} logged in ${currentRoom}.`,
+        : contextLabel === "hud"
+          ? `${result.data.defect_type}${measureInfo} anchored in Heads Up for ${currentRoom}.`
+          : `${result.data.defect_type}${measureInfo} logged in ${currentRoom}.`,
     );
 
     void sendVisionToSession(
@@ -585,7 +717,8 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
           }
 
           const refined = mergeVisionUpdate({ ...result.data, agentic_pass: true }, agenticResult);
-          const measurementPatch = agenticResult.measurement ? { measurement: agenticResult.measurement } : {};
+          const measurement = normalizeMeasurement(agenticResult.measurement);
+          const measurementPatch = measurement ? { measurement } : {};
           updateDefect(result.data.id, { ...refined, ...measurementPatch, agentic_pass: true });
           setInspectorMessage(`${refined.defect_type} verified with second-pass analysis in ${currentRoom}.`);
         } catch (error) {
@@ -599,6 +732,33 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
         }
       })();
     }
+
+    return result.data;
+  }
+
+  async function sendToVision(frameUrl: string, prompt = "", measureMode = false) {
+    await runVisionAnalysis({
+      frameUrl,
+      prompt,
+      measureMode,
+      source: "manual-vision",
+      contextLabel: "still",
+    });
+  }
+
+  async function analyzeHudRegion(
+    bbox: [number, number, number, number],
+    prompt = "",
+  ) {
+    const cropUrl = await cropHudRegion(bbox);
+    if (!cropUrl) return null;
+    return runVisionAnalysis({
+      frameUrl: cropUrl,
+      prompt,
+      measureMode: false,
+      source: "hud-vision",
+      contextLabel: "hud",
+    });
   }
 
   async function loadFromFile(file: File) {
@@ -618,10 +778,16 @@ If no defect is visible, still return your best assessment. Return ONLY valid JS
     });
   }
 
-  return { captureFrame, sendToVision, loadFromFile, videoRef, streamActive, cameraError, startStream };
+  return { captureFrame, sendToVision, analyzeHudRegion, loadFromFile, videoRef, streamActive, cameraError, startStream };
 }
 
-function inferDefectLocal(prompt: string, room: string, frameUrl: string, measureMode = false): Defect {
+function inferDefectLocal(
+  prompt: string,
+  room: string,
+  frameUrl: string,
+  measureMode = false,
+  source: DefectSource = "manual-vision",
+): Defect {
   const lowered = prompt.toLowerCase();
 
   // Type-based mapping
@@ -665,6 +831,8 @@ function inferDefectLocal(prompt: string, room: string, frameUrl: string, measur
     confidence: severity === "Critical" ? 0.9 : 0.6,
     photo_url: frameUrl,
     timestamp: Date.now(),
+    source,
+    evidence_thumbnail: source === "hud-vision" ? frameUrl : undefined,
     severity_rationale: rationale,
     review_required: reviewRequired || undefined,
   };
@@ -674,7 +842,7 @@ function inferDefectLocal(prompt: string, room: string, frameUrl: string, measur
       width_mm: defectType === "Wall crack" ? 0.5 : 15,
       length_mm: defectType === "Wall crack" ? 120 : 25,
       depth_mm: "surface-level",
-      reference_object: "SG 50-cent coin (24.66mm)",
+      reference_object: "SG 10-cent coin (18.5mm)",
       notes: "Estimated from local inference (no AI). Place coin next to defect for accurate measurement.",
     };
   }

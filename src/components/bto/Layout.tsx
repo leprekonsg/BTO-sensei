@@ -3,7 +3,7 @@ import { ApiKeyConfig } from "./ApiKeyConfig";
 import { useBTOStore } from "../../lib/store";
 import "./Layout.css";
 
-export type ViewTab = "scan" | "logger" | "report";
+export type ViewTab = "scan" | "heads-up" | "logger" | "report";
 
 interface LayoutProps {
   children: (activeTab: ViewTab) => ReactNode;
@@ -73,6 +73,12 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
 
+        <NavItem
+          icon="visibility"
+          label="Heads Up"
+          active={activeTab === "heads-up"}
+          onClick={() => setActiveTab("heads-up")}
+        />
         <NavItem
           icon="assignment_late"
           label="Logger"

@@ -113,7 +113,7 @@ export function ReportDashboard() {
       {/* Cover Page */}
       <div className="report-cover">
         <div className="report-cover-inner">
-          <div className="report-cover-badge font-mono">OFFICIAL INSPECTION DOCUMENT</div>
+          <div className="report-cover-badge font-mono">CONQUAS-READY INSPECTION DOCUMENT</div>
           <div className="report-cover-logo">
             <img src="/bto_sensei_logo_transparent.png" alt="BTO-Sensei" className="report-cover-logo-img" />
           </div>
@@ -136,6 +136,14 @@ export function ReportDashboard() {
               <span className="font-mono text-dim">DEFECTS</span>
               <span className="font-mono">{defects.length}</span>
             </div>
+            {data.conquas_grade && (
+              <div className="report-cover-meta-item">
+                <span className="font-mono text-dim">CONQUAS GRADE</span>
+                <span className={`font-mono ${data.conquas_grade === "Pass" ? "text-primary" : data.conquas_grade === "Fail" ? "text-critical" : "text-amber"}`}>
+                  {data.conquas_grade.toUpperCase()}
+                </span>
+              </div>
+            )}
           </div>
           {coverLoading && (
             <div className="report-cover-summary font-mono text-dim">Generating executive summary...</div>
@@ -146,8 +154,8 @@ export function ReportDashboard() {
             </div>
           )}
           <div className="report-cover-stamp stamp-effect">
-            <div className="report-stamp-label">Verified By</div>
-            <div className="report-stamp-value">{score >= 70 ? "PASSED" : "REVIEW"}</div>
+            <div className="report-stamp-label">CONQUAS 2022 R2</div>
+            <div className="report-stamp-value">{data.conquas_grade === "Fail" ? "REVIEW" : data.conquas_grade === "Conditional" ? "CONDITIONAL" : score >= 70 ? "PASSED" : "REVIEW"}</div>
             <div className="report-stamp-sub">Ah Seng // BTO-Sensei</div>
           </div>
         </div>
@@ -285,7 +293,17 @@ export function ReportDashboard() {
 
       {/* Export button */}
       <div className="report-export-section">
-        <button className="report-export-btn">
+        <button
+          className="report-export-btn"
+          onClick={() => {
+            const el = document.querySelector<HTMLElement>("[data-testid='report-dashboard']");
+            if (el) el.dataset.printing = "true";
+            window.print();
+            requestAnimationFrame(() => {
+              if (el) delete el.dataset.printing;
+            });
+          }}
+        >
           <span className="material-symbols-outlined">picture_as_pdf</span>
           Export Full PDF Report
         </button>

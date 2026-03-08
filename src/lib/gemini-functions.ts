@@ -45,7 +45,7 @@ export const logDefectDeclaration: FunctionDeclaration = {
       severity: {
         type: Type.STRING,
         enum: ["Minor", "Moderate", "Critical"],
-        description: "Severity per BCA CONQUAS: Critical = water seepage/leakage, structural cracks >0.3mm, broken glass, non-functional doors/windows/locks, waterproofing failure, electrical hazard, FCU leak. Moderate = hollow tiles, hairline cracks >50mm, paint spalling >50mm, misaligned frames >3mm, chipped tile edges, loose fittings. Minor = cosmetic scratches, small paint blemishes <50mm, tonality differences, minor alignment, removable stains, scuff marks.",
+        description: "Severity per BCA CONQUAS 2022 R2: Critical = water seepage/leakage, structural cracks >0.3mm, broken glass, non-functional doors/windows/locks, waterproofing failure, electrical hazard, FCU leak. Moderate = hollow tiles, hairline cracks >50mm, paint spalling >50mm, misaligned frames >3mm, chipped tile edges, loose fittings. Minor = cosmetic scratches, small paint blemishes <50mm, tonality differences, minor alignment, removable stains, scuff marks. Reference CONQUAS Appendix 1 tolerances when applicable.",
       },
       description: {
         type: Type.STRING,

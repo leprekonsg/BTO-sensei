@@ -1,7 +1,48 @@
 export type Severity = "Minor" | "Moderate" | "Critical";
+export type ConquasVerdict = "PASS" | "FAIL";
 export type AudioMode = "prerecorded" | "live-mic";
 export type TapClassification = "hollow" | "solid";
 export type FailureMode = "audio" | "camera" | "report";
+export type DefectSource = "manual-vision" | "hud-vision" | "acoustic";
+export type HudAnchorStatus = "pending" | "locked" | "explaining" | "resolved" | "review-required";
+export type HudAnchorSide = "left" | "right";
+export type HudMode = "vision" | "acoustic";
+
+export interface HudSupport {
+  mode: "manual" | "auto" | "auto-fallback";
+  backend: "webgpu" | "webgl" | "wasm" | "none";
+  reason: string;
+}
+
+export interface HudDetection {
+  id: string;
+  bbox: [number, number, number, number];
+  score: number;
+  label_hint?: string;
+  stability: number;
+  last_seen_at: number;
+  source: "manual" | "canvas-detector";
+}
+
+export interface HudAnchor {
+  id: string;
+  detection_id: string;
+  bbox: [number, number, number, number];
+  x: number;
+  y: number;
+  side: HudAnchorSide;
+  status: HudAnchorStatus;
+  title: string;
+  subtitle: string;
+  defect_id?: string;
+  review_required?: boolean;
+}
+
+export interface HudTapPoint {
+  x: number;
+  y: number;
+  timestamp: number;
+}
 
 export interface TapResult {
   type: TapClassification;
@@ -15,6 +56,10 @@ export interface Measurement {
   depth_mm?: string;
   reference_object: string;
   notes: string;
+  gap_mm?: number;
+  lippage_mm?: number;
+  verticality_mm_per_m?: number;
+  surface_evenness_mm?: number;
 }
 
 export interface Defect {
@@ -32,6 +77,11 @@ export interface Defect {
   review_required?: boolean;
   bbox?: [number, number, number, number];
   agentic_pass?: boolean;
+  source?: DefectSource;
+  evidence_thumbnail?: string;
+  conquas_item_id?: string;
+  conquas_appendix?: string;
+  conquas_verdict?: ConquasVerdict;
 }
 
 export interface RoomScore {
@@ -48,6 +98,7 @@ export interface InspectionReport {
   priority_defects: Defect[];
   inspector_note: string;
   cover_summary?: string;
+  conquas_grade?: "Pass" | "Fail" | "Conditional";
 }
 
 export type FlatType = "3-room" | "4-room" | "5-room";
@@ -86,6 +137,20 @@ export interface BTOStore {
   defects: Defect[];
   addDefect: (defect: Defect) => void;
   updateDefect: (id: string, patch: Partial<Defect>) => void;
+  hudSupport: HudSupport;
+  setHudSupport: (support: HudSupport) => void;
+  hudMode: HudMode;
+  setHudMode: (mode: HudMode) => void;
+  hudDetections: HudDetection[];
+  setHudDetections: (detections: HudDetection[]) => void;
+  addHudDetection: (detection: HudDetection) => void;
+  hudAnchors: HudAnchor[];
+  upsertHudAnchor: (anchor: HudAnchor) => void;
+  removeHudAnchor: (id: string) => void;
+  clearHudAnchors: () => void;
+  hudTapPoint: HudTapPoint | null;
+  setHudTapPoint: (point: HudTapPoint | null) => void;
+  clearHudSession: () => void;
   cameraPreview: string | null;
   setCameraPreview: (url: string | null) => void;
   report: AsyncState<InspectionReport>;
@@ -110,8 +175,8 @@ export interface BTOStore {
 export interface UseBTOAudioReturn {
   analyzeTap: (
     source: "prerecorded-hollow" | "prerecorded-solid" | AudioBuffer,
-  ) => Promise<void>;
-  analyzeLiveMic: () => Promise<void>;
+  ) => Promise<TapResult | null>;
+  analyzeLiveMic: () => Promise<TapResult | null>;
   frequencyData: Float32Array | null;
   lastTapResult: AsyncState<TapResult>;
   audioMode: AudioMode;
@@ -121,6 +186,10 @@ export interface UseBTOAudioReturn {
 export interface UseCameraReturn {
   captureFrame: () => Promise<string | null>;
   sendToVision: (frameUrl: string, prompt?: string, measureMode?: boolean) => Promise<void>;
+  analyzeHudRegion: (
+    bbox: [number, number, number, number],
+    prompt?: string,
+  ) => Promise<Defect | null>;
   loadFromFile: (file: File) => Promise<void>;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   streamActive: boolean;

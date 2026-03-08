@@ -121,6 +121,36 @@ export const useBTOStore = create<BTOStore>()(
             blueprintCoords: buildBlueprintState(defects, state.flatType),
           };
         }),
+      hudSupport: {
+        mode: "manual",
+        backend: "none",
+        reason: "Tap to mark defects manually. Local edge detection can be wired in behind this HUD contract.",
+      },
+      setHudSupport: (support) => set({ hudSupport: support }),
+      hudMode: "vision",
+      setHudMode: (mode) => set({ hudMode: mode }),
+      hudDetections: [],
+      setHudDetections: (detections) => set({ hudDetections: detections }),
+      addHudDetection: (detection) =>
+        set((state) => {
+          const next = [...state.hudDetections, detection];
+          return { hudDetections: next.length > 50 ? next.slice(-50) : next };
+        }),
+      hudAnchors: [],
+      upsertHudAnchor: (anchor) =>
+        set((state) => ({
+          hudAnchors: state.hudAnchors.some((entry) => entry.id === anchor.id)
+            ? state.hudAnchors.map((entry) => entry.id === anchor.id ? anchor : entry)
+            : [...state.hudAnchors, anchor],
+        })),
+      removeHudAnchor: (id) =>
+        set((state) => ({
+          hudAnchors: state.hudAnchors.filter((anchor) => anchor.id !== id),
+        })),
+      clearHudAnchors: () => set({ hudAnchors: [], hudDetections: [] }),
+      hudTapPoint: null,
+      setHudTapPoint: (point) => set({ hudTapPoint: point }),
+      clearHudSession: () => set({ hudDetections: [], hudAnchors: [], hudTapPoint: null }),
       cameraPreview: null,
       setCameraPreview: (url) => set({ cameraPreview: url }),
       report: emptyAsyncState<InspectionReport>(),

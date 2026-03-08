@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getActiveSession } from "./use-bto-config";
 import { validateSeverity } from "../lib/defect-utils";
+import { lookupConquasItemId, lookupConquasAppendix } from "../lib/conquas";
 import { useBTOStore } from "../lib/store";
 import type {
   AcousticToolPayload,
@@ -82,6 +83,8 @@ export function useGeminiTools() {
                 review_required: payload.review_required,
                 bbox: payload.bbox,
                 timestamp: Date.now(),
+                conquas_item_id: lookupConquasItemId(payload.defect_type),
+                conquas_appendix: lookupConquasAppendix(payload.defect_type),
               });
               storeRef.current.addDefect(defect);
               storeRef.current.setInspectorMessage(

@@ -1,7 +1,7 @@
 {
     "name": "BTO-Sensei",
     "short_name": "BTO-Sensei",
-    "description": "AI-powered HDB inspection assistant with acoustic analysis, defect logging, and report generation.",
+    "description": "CONQUAS 2022 R2 aligned AI-powered HDB inspection assistant with acoustic analysis, vision defect detection, and PDF report generation.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#1A1A1A",

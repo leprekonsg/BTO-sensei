@@ -610,3 +610,30 @@
     font-size: 12px;
     color: var(--severity-critical);
 }
+
+/* Print / PDF export */
+@media print {
+    body > *:not([data-testid="report-dashboard"]),
+    .layout-tabs,
+    .layout-header,
+    .report-export-section,
+    .blueprint-annotate-btn {
+        display: none !important;
+    }
+    [data-testid="report-dashboard"] {
+        position: static !important;
+        padding: 0 !important;
+    }
+    .report-cover {
+        break-after: page;
+    }
+    .report-section {
+        gap: 12px;
+    }
+    .report-gauge-svg circle {
+        stroke: #333 !important;
+    }
+    .report-gauge-svg circle + circle {
+        stroke: #ec5b13 !important;
+    }
+}

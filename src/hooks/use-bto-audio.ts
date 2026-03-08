@@ -71,6 +71,8 @@ export function useBTOAudio(): UseBTOAudioReturn {
     if (!result.isFallback) {
       void sendAcousticToSession(result.data, currentRoom);
     }
+
+    return result.data;
   }
 
   async function analyzeLiveMic() {
@@ -113,6 +115,8 @@ export function useBTOAudio(): UseBTOAudioReturn {
     if (!result.isFallback) {
       void sendAcousticToSession(result.data, currentRoom);
     }
+
+    return result.data;
   }
 
   return {

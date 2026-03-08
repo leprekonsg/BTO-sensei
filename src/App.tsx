@@ -8,6 +8,7 @@ import { Spectrogram } from "./components/bto/Spectrogram";
 import { AcousticResultCard } from "./components/bto/AcousticResultCard";
 import { CameraCapture } from "./components/bto/CameraCapture";
 import { DefectLogSidebar } from "./components/bto/DefectLogSidebar";
+import { HeadsUpView } from "./components/bto/HeadsUpView";
 import { UnitInfo } from "./components/bto/UnitInfo";
 import { ConfirmChopButton } from "./components/bto/ConfirmChopButton";
 import { ChopStamp } from "./components/bto/ChopStamp";
@@ -116,6 +117,20 @@ function AppContent() {
                     <div style={{ height: 16 }} />
                     <DefectLogSidebar />
                     <ConfirmChopButton />
+                  </div>
+                </ErrorBoundary>
+              );
+
+            case "heads-up":
+              return (
+                <ErrorBoundary label="Heads Up">
+                  <div className="view-content animate-fade-in" style={{ paddingBottom: 0 }}>
+                    <FailureControls />
+                    <RoomNavigator />
+                    <div style={{ height: 8 }} />
+                    <HeadsUpView />
+                    <div style={{ height: 16 }} />
+                    <DefectLogSidebar />
                   </div>
                 </ErrorBoundary>
               );

@@ -40,6 +40,43 @@
     align-items: flex-start;
 }
 
+.defect-header-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+}
+
+.defect-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.defect-source--hud-vision {
+    color: rgba(0, 255, 255, 0.90);
+    background: rgba(0, 255, 255, 0.10);
+    border: 1px solid rgba(0, 255, 255, 0.25);
+}
+
+.defect-source--acoustic {
+    color: rgba(255, 191, 0, 0.90);
+    background: rgba(255, 191, 0, 0.10);
+    border: 1px solid rgba(255, 191, 0, 0.25);
+}
+
+.defect-source--manual-vision {
+    color: var(--text-muted);
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.20);
+}
+
 .defect-type {
     font-size: 12px;
     font-weight: 900;
@@ -110,6 +147,21 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
+}
+
+.defect-conquas-ref {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 3px 6px;
+    background: rgba(0, 255, 255, 0.06);
+    border: 1px solid rgba(0, 255, 255, 0.18);
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(0, 255, 255, 0.85);
 }
 
 .defect-measurement {

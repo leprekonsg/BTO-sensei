@@ -5,6 +5,11 @@ import {
   mergeVisionUpdate,
   validateSeverity,
 } from "../src/lib/defect-utils.ts";
+import {
+  shouldClearHudTapPoint,
+  shouldFinalizeWorkingAnchor,
+} from "../src/lib/vision/hud-guards.ts";
+import { buildHudAnchor, createManualHudDetection } from "../src/lib/vision/hud.ts";
 import type { Defect } from "../src/lib/types.ts";
 
 function makeDefect(overrides: Partial<Defect> = {}): Defect {
@@ -69,8 +74,54 @@ function testInvalidSeverityMerge() {
   );
 }
 
+function testHudAnchorPlacement() {
+  const detection = createManualHudDetection({ x: 220, y: 510, timestamp: 1234 }, 200);
+  assert.deepEqual(detection.bbox, [410, 120, 610, 320]);
+
+  const anchor = buildHudAnchor(detection, 0, "explaining", {
+    id: "anchor-1",
+    title: "Analyzing ROI",
+  });
+  assert.equal(anchor.id, "anchor-1");
+  assert.equal(anchor.side, "right");
+  assert.equal(anchor.status, "explaining");
+  assert.equal(anchor.title, "Analyzing ROI");
+  assert.ok(anchor.x >= 4 && anchor.x <= 74);
+  assert.ok(anchor.y >= 10 && anchor.y <= 78);
+}
+
+function testHudAsyncGuards() {
+  assert.equal(
+    shouldFinalizeWorkingAnchor(4, 4, "anchor-a", "anchor-a"),
+    true,
+  );
+  assert.equal(
+    shouldFinalizeWorkingAnchor(4, 5, "anchor-a", "anchor-a"),
+    false,
+  );
+  assert.equal(
+    shouldFinalizeWorkingAnchor(4, 4, "anchor-a", "anchor-b"),
+    false,
+  );
+
+  assert.equal(
+    shouldClearHudTapPoint(8, 8, 1001, 1001),
+    true,
+  );
+  assert.equal(
+    shouldClearHudTapPoint(8, 9, 1001, 1001),
+    false,
+  );
+  assert.equal(
+    shouldClearHudTapPoint(8, 8, 1001, 1002),
+    false,
+  );
+}
+
 testClampBBox();
 testValidateSeverity();
 testInvalidSeverityMerge();
+testHudAnchorPlacement();
+testHudAsyncGuards();
 
 console.log("vision-defect harness passed");
