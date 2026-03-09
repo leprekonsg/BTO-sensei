@@ -358,6 +358,8 @@ export interface FloorPlanDraft {
 
 export interface DefectPlacement {
   defectId: string;
+  planId: string;
+  planVersion: number;
   mode: PlacementMode;
   roomId?: string;
   surfaceType?: SurfaceType;

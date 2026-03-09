@@ -1,8 +1,11 @@
-import type { Defect, DefectSource } from "../../lib/types";
+import type { Defect, DefectPlacement, DefectSource } from "../../lib/types";
 import "./DefectCard.css";
 
 interface DefectCardProps {
     defect: Defect;
+    displayRoom?: string;
+    placement?: DefectPlacement;
+    onPlace?: () => void;
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -29,9 +32,22 @@ const SOURCE_ICONS: Record<DefectSource, string> = {
     "manual-vision": "photo_camera",
 };
 
-export function DefectCard({ defect }: DefectCardProps) {
+function placementLabel(placement: DefectPlacement | undefined): string {
+    if (!placement) return "Not placed";
+    switch (placement.mode) {
+        case "wall": return "Wall anchored";
+        case "point": return "Exact spot";
+        case "room": return "Room anchored";
+        case "unplaced": return "Place later";
+        default: return "Not placed";
+    }
+}
+
+export function DefectCard({ defect, displayRoom, placement, onPlace }: DefectCardProps) {
     const color = SEVERITY_COLOR[defect.severity] ?? "var(--primary)";
     const barWidth = SEVERITY_WIDTH[defect.severity] ?? "50%";
+    const roomLabel = displayRoom ?? defect.room;
+    const showPlacementAction = typeof onPlace === "function";
 
     return (
         <article className="defect-card industrial-border" data-testid="defect-item">
@@ -59,7 +75,7 @@ export function DefectCard({ defect }: DefectCardProps) {
                                 {SOURCE_LABELS[defect.source] ?? defect.source}
                             </span>
                         )}
-                        <span className="defect-id font-mono">{defect.room}</span>
+                        <span className="defect-id font-mono">{roomLabel}</span>
                     </div>
                 </div>
                 <div className="defect-severity-row">
@@ -96,6 +112,24 @@ export function DefectCard({ defect }: DefectCardProps) {
                                 ? `${defect.measurement.width_mm}mm x ${defect.measurement.length_mm}mm`
                                 : defect.measurement.notes}
                         </span>
+                    </div>
+                )}
+                {showPlacementAction && (
+                    <div className="defect-placement-row">
+                        <span className={`defect-placement-badge defect-placement-badge--${placement?.mode ?? "none"}`}>
+                            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                                {placement?.mode && placement.mode !== "unplaced" ? "place_item" : "location_off"}
+                            </span>
+                            {placementLabel(placement)}
+                        </span>
+                        <button
+                            type="button"
+                            className="defect-place-btn"
+                            onClick={onPlace}
+                            data-testid={`defect-place-${defect.id}`}
+                        >
+                            {placement && placement.mode !== "unplaced" ? "Adjust" : "Place"}
+                        </button>
                     </div>
                 )}
             </div>

@@ -1,10 +1,10 @@
-import type { BlueprintCoord, DefectPlacement, UnitPlan } from "../../lib/types";
+import type { PlanMarker } from "../../lib/plan-helpers";
+import type { UnitPlan } from "../../lib/types";
 import "./FloorPlanSVG.css";
 
 interface VerifiedPlanSVGProps {
   plan: UnitPlan;
-  coords: BlueprintCoord[];
-  placements: Record<string, DefectPlacement>;
+  markers: PlanMarker[];
   showAnnotations?: boolean;
 }
 
@@ -17,10 +17,10 @@ function markerColor(severity: string) {
 }
 
 /**
- * Renders a verified UnitPlan as SVG with defect markers placed
- * using explicit DefectPlacement coordinates.
+ * Renders a verified UnitPlan as SVG with defect markers derived
+ * from defects + valid placements (via selectVerifiedPlanMarkers).
  */
-export function VerifiedPlanSVG({ plan, coords, placements, showAnnotations = false }: VerifiedPlanSVGProps) {
+export function VerifiedPlanSVG({ plan, markers, showAnnotations = false }: VerifiedPlanSVGProps) {
   const vb = plan.bounds;
   const viewBox = `0 0 ${vb.width} ${vb.height}`;
 
@@ -67,64 +67,47 @@ export function VerifiedPlanSVG({ plan, coords, placements, showAnnotations = fa
           />
         ))}
 
-        {/* Defect markers - use placement positions when available, fall back to coords */}
-        {coords.map((coord) => {
-          const placement = placements[coord.defect_id];
-          let cx = coord.x;
-          let cy = coord.y;
-
-          if (placement?.localPos) {
-            cx = placement.localPos[0];
-            cy = placement.localPos[1];
-          } else if (placement?.roomId) {
-            const room = plan.rooms.find((r) => r.id === placement.roomId);
-            if (room) {
-              cx = room.centroid[0];
-              cy = room.centroid[1];
-            }
-          }
-
-          return (
-            <g key={coord.defect_id}>
-              <circle cx={cx} cy={cy} r="14" fill={markerColor(coord.severity)} opacity="0.16" />
-              <circle
-                cx={cx} cy={cy} r="6"
-                fill={markerColor(coord.severity)}
-                stroke="white"
-                strokeWidth="2"
-                style={{ filter: `drop-shadow(0 0 6px ${markerColor(coord.severity)})` }}
-              />
-              {showAnnotations && (
-                <>
-                  <line
-                    x1={cx + 6} y1={cy - 6}
-                    x2={cx + 22} y2={cy - 18}
-                    stroke={markerColor(coord.severity)}
-                    strokeWidth="1"
-                    opacity="0.6"
-                  />
-                  <rect
-                    x={cx + 20} y={cy - 28}
-                    width={Math.max(coord.label.length * 5.5, 50)} height="14"
-                    rx="2"
-                    fill="rgba(0,0,0,0.85)"
-                    stroke={markerColor(coord.severity)}
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={cx + 24} y={cy - 18}
-                    fill={markerColor(coord.severity)}
-                    fontSize="8"
-                    fontWeight="700"
-                    fontFamily="monospace"
-                  >
-                    {coord.label.toUpperCase()}
-                  </text>
-                </>
-              )}
-            </g>
-          );
-        })}
+        {/* Defect markers from verified placements */}
+        {markers.map((marker) => (
+          <g key={marker.defectId} data-testid="verified-plan-marker" data-defect-id={marker.defectId}>
+            <circle cx={marker.x} cy={marker.y} r="14" fill={markerColor(marker.severity)} opacity="0.16" />
+            <circle
+              cx={marker.x} cy={marker.y} r="6"
+              fill={markerColor(marker.severity)}
+              stroke="white"
+              strokeWidth="2"
+              style={{ filter: `drop-shadow(0 0 6px ${markerColor(marker.severity)})` }}
+            />
+            {showAnnotations && (
+              <>
+                <line
+                  x1={marker.x + 6} y1={marker.y - 6}
+                  x2={marker.x + 22} y2={marker.y - 18}
+                  stroke={markerColor(marker.severity)}
+                  strokeWidth="1"
+                  opacity="0.6"
+                />
+                <rect
+                  x={marker.x + 20} y={marker.y - 28}
+                  width={Math.max(marker.label.length * 5.5, 50)} height="14"
+                  rx="2"
+                  fill="rgba(0,0,0,0.85)"
+                  stroke={markerColor(marker.severity)}
+                  strokeWidth="1"
+                />
+                <text
+                  x={marker.x + 24} y={marker.y - 18}
+                  fill={markerColor(marker.severity)}
+                  fontSize="8"
+                  fontWeight="700"
+                  fontFamily="monospace"
+                >
+                  {marker.label.toUpperCase()}
+                </text>
+              </>
+            )}
+          </g>
+        ))}
 
         {/* Plan type label */}
         <text

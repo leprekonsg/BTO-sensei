@@ -79,8 +79,27 @@ Focus on identifying rooms and their approximate polygonal boundaries. Do not at
 
 Return ONLY valid JSON matching the schema.`;
 
+function getTestDraft(): FloorPlanDraft | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const candidate = (
+    window as Window & {
+      __BTO_TEST_PLAN_DRAFT__?: FloorPlanDraft;
+    }
+  ).__BTO_TEST_PLAN_DRAFT__;
+
+  return candidate ? validateAndCleanDraft(candidate) : null;
+}
+
 /** Extract a floor plan draft from an image using Gemini. */
 export async function extractFloorPlanDraft(imageDataUrl: string): Promise<FloorPlanDraft> {
+  const testDraft = getTestDraft();
+  if (testDraft) {
+    return testDraft;
+  }
+
   const client = getGeminiClient();
   if (!client) throw new Error("No API key configured");
 

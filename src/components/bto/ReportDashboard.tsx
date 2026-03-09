@@ -3,12 +3,12 @@ import { useBTOStore } from "../../lib/store";
 import { generateCoverSummary, generateLocalCoverSummary } from "../../lib/gemini-report";
 import { FloorPlanSVG } from "./FloorPlanSVG";
 import { VerifiedPlanSVG } from "./VerifiedPlanSVG";
-import { SpatialBadge } from "./PlanImport";
-import { hasVerifiedPlan } from "../../lib/plan-helpers";
+import { SpatialBadge } from "./SpatialBadge";
+import { hasVerifiedPlan, selectVerifiedPlanMarkers } from "../../lib/plan-helpers";
 import type { FlatType } from "../../lib/types";
 import "./ReportDashboard.css";
 
-const PlanImportLazy = lazy(() => import("./PlanImportLazy"));
+const PlanImportLazy = lazy(() => import("./PlanImport").then((m) => ({ default: m.PlanImport })));
 
 const FLAT_TYPES: FlatType[] = ["3-room", "4-room", "5-room"];
 
@@ -105,6 +105,7 @@ export function ReportDashboard() {
             className="report-generate-btn"
             onClick={() => setShowPlanImport(!showPlanImport)}
             style={{ marginBottom: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.15)" }}
+            data-testid="plan-import-toggle"
           >
             <span className="material-symbols-outlined">add_photo_alternate</span>
             {unitPlan?.status === "verified" ? "Floor Plan Added" : "Add Floor Plan"}
@@ -264,8 +265,7 @@ export function ReportDashboard() {
           {useVerifiedPlan && unitPlan ? (
             <VerifiedPlanSVG
               plan={unitPlan}
-              coords={coords.data ?? []}
-              placements={defectPlacements}
+              markers={selectVerifiedPlanMarkers(defects, defectPlacements, unitPlan)}
               showAnnotations={showAnnotations}
             />
           ) : (

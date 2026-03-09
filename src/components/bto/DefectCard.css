@@ -177,3 +177,57 @@
     font-weight: 600;
     color: var(--hazard);
 }
+
+.defect-placement-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.defect-placement-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    color: var(--text-muted);
+    background: rgba(148, 163, 184, 0.08);
+}
+
+.defect-placement-badge--room,
+.defect-placement-badge--wall,
+.defect-placement-badge--point {
+    color: var(--primary);
+    background: rgba(0, 255, 136, 0.10);
+    border-color: rgba(0, 255, 136, 0.22);
+}
+
+.defect-placement-badge--unplaced {
+    color: var(--hazard);
+    background: rgba(250, 204, 21, 0.1);
+    border-color: rgba(250, 204, 21, 0.22);
+}
+
+.defect-place-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.defect-place-btn:hover {
+    border-color: rgba(0, 255, 136, 0.28);
+    color: var(--primary);
+}

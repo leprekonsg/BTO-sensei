@@ -277,6 +277,7 @@ export const useBTOStore = create<BTOStore>()(
           planDraft: null,
           spatialMode: "fallback",
           selectedPlanRoomId: null,
+          defectPlacements: {},
           planEditorState: DEFAULT_PLAN_EDITOR_STATE,
           planImportState: DEFAULT_PLAN_IMPORT_STATE,
         }),

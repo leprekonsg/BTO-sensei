@@ -97,7 +97,7 @@ export function PlanEditor({ plan, onConfirm, onReset, onClear }: PlanEditorProp
   const selectedRoom = editPlan.rooms.find((r) => r.id === selectedRoomId);
 
   return (
-    <div className="plan-editor">
+    <div className="plan-editor" data-testid="plan-editor">
       <div className="plan-editor-svg-wrap">
         <svg
           ref={svgRef}
@@ -201,7 +201,11 @@ export function PlanEditor({ plan, onConfirm, onReset, onClear }: PlanEditorProp
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>restart_alt</span>
           Reset to Draft
         </button>
-        <button className="plan-editor-btn plan-editor-btn--primary" onClick={handleConfirm}>
+        <button
+          className="plan-editor-btn plan-editor-btn--primary"
+          onClick={handleConfirm}
+          data-testid="confirm-plan"
+        >
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
           Confirm Plan
         </button>

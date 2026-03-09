@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useBTOStore } from "../../lib/store";
-import { findRoomAtPoint, findNearestWall, createRoomPlacement } from "../../lib/plan-helpers";
+import { findRoomAtPoint, findNearestWall } from "../../lib/plan-helpers";
 import type { DefectPlacement, Point2D, UnitPlan } from "../../lib/types";
 import "./DefectPlacementOverlay.css";
 
@@ -46,36 +46,52 @@ export function DefectPlacementOverlay({ defectId, plan, onDone, existingPlaceme
   }, [getSvgPoint, plan]);
 
   const handleConfirm = useCallback(() => {
-    if (!tapPoint) return;
+    if (!selectedRoomId && !tapPoint) return;
 
-    const wall = findNearestWall(plan, tapPoint, 15);
-    const placement: DefectPlacement = {
-      defectId,
-      mode: wall ? "wall" : selectedRoomId ? "point" : "unplaced",
-      roomId: selectedRoomId ?? undefined,
-      segmentId: wall?.id,
-      localPos: tapPoint,
-      screenTap: tapPoint,
-      confirmedByUser: true,
-    };
+    if (tapPoint) {
+      const wall = findNearestWall(plan, tapPoint, 15);
+      const placement: DefectPlacement = {
+        defectId,
+        planId: plan.id,
+        planVersion: plan.version,
+        mode: wall ? "wall" : selectedRoomId ? "point" : "unplaced",
+        roomId: selectedRoomId ?? undefined,
+        segmentId: wall?.id,
+        localPos: tapPoint,
+        screenTap: tapPoint,
+        confirmedByUser: true,
+      };
+      upsertDefectPlacement(placement);
+    } else if (selectedRoomId) {
+      upsertDefectPlacement({
+        defectId,
+        planId: plan.id,
+        planVersion: plan.version,
+        mode: "room",
+        roomId: selectedRoomId,
+        confirmedByUser: true,
+      });
+    }
 
-    upsertDefectPlacement(placement);
     onDone();
   }, [defectId, tapPoint, selectedRoomId, plan, upsertDefectPlacement, onDone]);
 
-  const handleRoomConfirm = useCallback((roomId: string) => {
-    upsertDefectPlacement(createRoomPlacement(defectId, roomId, true));
-    onDone();
-  }, [defectId, upsertDefectPlacement, onDone]);
+  const handleRoomSelect = useCallback((roomId: string) => {
+    setSelectedRoomId(roomId);
+    // Clear exact tap point when selecting a room directly
+    setTapPoint(null);
+  }, []);
 
   const handleSkip = useCallback(() => {
     upsertDefectPlacement({
       defectId,
+      planId: plan.id,
+      planVersion: plan.version,
       mode: "unplaced",
       confirmedByUser: false,
     });
     onDone();
-  }, [defectId, upsertDefectPlacement, onDone]);
+  }, [defectId, plan, upsertDefectPlacement, onDone]);
 
   const handleRemove = useCallback(() => {
     removeDefectPlacement(defectId);
@@ -85,12 +101,13 @@ export function DefectPlacementOverlay({ defectId, plan, onDone, existingPlaceme
   const selectedRoom = plan.rooms.find((r) => r.id === selectedRoomId);
 
   return (
-    <div className="placement-overlay">
+    <div className="placement-overlay" data-testid="placement-overlay">
       <svg
         ref={svgRef}
         className="placement-overlay-svg"
         viewBox={viewBox}
         onPointerUp={handleTap}
+        data-testid="placement-overlay-svg"
       >
         <rect width={vb.width} height={vb.height} fill="#14191e" />
 
@@ -103,7 +120,8 @@ export function DefectPlacementOverlay({ defectId, plan, onDone, existingPlaceme
               stroke={room.id === selectedRoomId ? "var(--primary, #00ff88)" : "rgba(255,255,255,0.1)"}
               strokeWidth={room.id === selectedRoomId ? 2 : 1}
               className={`placement-room ${room.id === selectedRoomId ? "placement-room--active" : ""}`}
-              onClick={() => handleRoomConfirm(room.id)}
+              onClick={(e) => { e.stopPropagation(); handleRoomSelect(room.id); }}
+              data-testid={`placement-room-${room.id}`}
             />
             <text
               x={room.centroid[0]}
@@ -133,9 +151,6 @@ export function DefectPlacementOverlay({ defectId, plan, onDone, existingPlaceme
           />
         ))}
 
-        {/* Existing placement markers for other defects */}
-        {/* (handled by parent if needed) */}
-
         {/* Current tap marker */}
         {tapPoint && (
           <g className="placement-marker">
@@ -154,27 +169,33 @@ export function DefectPlacementOverlay({ defectId, plan, onDone, existingPlaceme
       </svg>
 
       {/* Prompt */}
-      <div className="placement-prompt">
+      <div className="placement-prompt" data-testid="placement-prompt">
         <span className="material-symbols-outlined" style={{ fontSize: 16, opacity: 0.5 }}>touch_app</span>
         <span>
           {tapPoint
             ? `Placed in ${selectedRoom?.label ?? "plan"}. Confirm or adjust.`
-            : "Tap a room or exact spot to place defect."}
+            : selectedRoomId
+              ? `${selectedRoom?.label ?? "Room"} selected. Confirm or tap exact spot.`
+              : "Tap a room or exact spot to place defect."}
         </span>
       </div>
 
       {/* Actions */}
       <div className="placement-actions">
-        <button className="placement-btn placement-btn--skip" onClick={handleSkip}>
+        <button className="placement-btn placement-btn--skip" onClick={handleSkip} data-testid="placement-skip">
           Place Later
         </button>
         {existingPlacement && (
-          <button className="placement-btn" onClick={handleRemove}>
+          <button className="placement-btn" onClick={handleRemove} data-testid="placement-remove">
             Remove
           </button>
         )}
-        {tapPoint && (
-          <button className="placement-btn placement-btn--confirm" onClick={handleConfirm}>
+        {(tapPoint || selectedRoomId) && (
+          <button
+            className="placement-btn placement-btn--confirm"
+            onClick={handleConfirm}
+            data-testid="placement-confirm"
+          >
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check</span>
             Confirm
           </button>

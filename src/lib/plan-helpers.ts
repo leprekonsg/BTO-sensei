@@ -7,10 +7,21 @@ import type {
   Point2D,
   Polygon,
   RoomName,
+  Severity,
   SpatialMode,
   UnitPlan,
   WallSegment,
 } from "./types";
+
+// ── Marker type for VerifiedPlanSVG ──────────────────────────────────
+
+export interface PlanMarker {
+  defectId: string;
+  x: number;
+  y: number;
+  severity: Severity;
+  label: string;
+}
 
 // ── Geometry primitives ──────────────────────────────────────────────
 
@@ -227,9 +238,11 @@ function pointToSegmentDist(p: Point2D, a: Point2D, b: Point2D): number {
 }
 
 /** Create a default room-level DefectPlacement for a defect. */
-export function createRoomPlacement(defectId: string, roomId: string, confirmed = false): DefectPlacement {
+export function createRoomPlacement(defectId: string, roomId: string, planId: string, planVersion: number, confirmed = false): DefectPlacement {
   return {
     defectId,
+    planId,
+    planVersion,
     mode: "room",
     roomId,
     confirmedByUser: confirmed,
@@ -242,4 +255,63 @@ export function matchRoomByName(plan: UnitPlan, roomName: RoomName): PlanRoom | 
   return plan.rooms.find((r) => r.label.toLowerCase() === lower)
     ?? plan.rooms.find((r) => lower.includes(r.label.toLowerCase()) || r.label.toLowerCase().includes(lower))
     ?? null;
+}
+
+/** Return only placements that belong to the current plan version. */
+export function selectValidPlacements(
+  placements: Record<string, DefectPlacement>,
+  plan: UnitPlan | null,
+): Record<string, DefectPlacement> {
+  if (!plan) return {};
+  const result: Record<string, DefectPlacement> = {};
+  for (const [id, p] of Object.entries(placements)) {
+    if (p.planId === plan.id && p.planVersion === plan.version) {
+      result[id] = p;
+    }
+  }
+  return result;
+}
+
+/**
+ * Derive plan markers from defects + valid placements + unitPlan.
+ * This is the single source of truth for VerifiedPlanSVG markers.
+ */
+export function selectVerifiedPlanMarkers(
+  defects: Defect[],
+  placements: Record<string, DefectPlacement>,
+  plan: UnitPlan,
+): PlanMarker[] {
+  const valid = selectValidPlacements(placements, plan);
+  const markers: PlanMarker[] = [];
+
+  for (const defect of defects) {
+    const placement = valid[defect.id];
+    if (!placement || placement.mode === "unplaced") continue;
+
+    let x: number;
+    let y: number;
+
+    if (placement.localPos) {
+      [x, y] = placement.localPos;
+    } else if (placement.roomId) {
+      const room = plan.rooms.find((r) => r.id === placement.roomId);
+      if (room) {
+        [x, y] = room.centroid;
+      } else {
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    markers.push({
+      defectId: defect.id,
+      x,
+      y,
+      severity: defect.severity,
+      label: defect.defect_type,
+    });
+  }
+
+  return markers;
 }

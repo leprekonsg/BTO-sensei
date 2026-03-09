@@ -2,10 +2,12 @@ import { useCallback, useRef, useState, type DragEvent } from "react";
 import { useBTOStore } from "../../lib/store";
 import { extractFloorPlanDraft, readFileAsDataUrl } from "../../lib/plan-extraction";
 import { normalizeDraft } from "../../lib/plan-helpers";
+import { PlanEditor } from "./PlanEditor";
 import type { UnitPlan } from "../../lib/types";
 import "./PlanImport.css";
 
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+const ACCEPTED_EXTENSIONS = ".png,.jpeg,.jpg,.webp,.pdf";
 
 export function PlanImport() {
   const setPlanDraft = useBTOStore((s) => s.setPlanDraft);
@@ -20,17 +22,26 @@ export function PlanImport() {
   const [dragover, setDragover] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(planImportState.rawImageUrl ?? null);
   const [normalizedPlan, setNormalizedPlan] = useState<UnitPlan | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const processFile = useCallback(async (file: File) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setPlanImportState({ status: "error", error: "Unsupported file type. Use PNG, JPEG, or WebP." });
+      setPlanImportState({ status: "error", error: "Unsupported file type. Use PNG, JPEG, WebP, or PDF." });
       return;
     }
 
     setPlanImportState({ status: "uploading" });
 
     try {
-      const dataUrl = await readFileAsDataUrl(file);
+      let dataUrl: string;
+
+      if (file.type === "application/pdf") {
+        const { rasterizePdfToDataUrl } = await import("../../lib/pdf-rasterizer");
+        dataUrl = await rasterizePdfToDataUrl(file);
+      } else {
+        dataUrl = await readFileAsDataUrl(file);
+      }
+
       setPreviewUrl(dataUrl);
       setPlanImportState({ status: "extracting", rawImageUrl: dataUrl });
 
@@ -61,17 +72,21 @@ export function PlanImport() {
     if (file) processFile(file);
   }, [processFile]);
 
-  const handleConfirm = useCallback(() => {
-    if (normalizedPlan) {
-      verifyUnitPlan(normalizedPlan);
-      setNormalizedPlan(null);
-    }
-  }, [normalizedPlan, verifyUnitPlan]);
+  const handleEditorConfirm = useCallback((editedPlan: UnitPlan) => {
+    verifyUnitPlan(editedPlan);
+    setNormalizedPlan(null);
+    setEditing(false);
+  }, [verifyUnitPlan]);
+
+  const handleEditorReset = useCallback(() => {
+    // reset just the editor edits, keep normalizedPlan
+  }, []);
 
   const handleClear = useCallback(() => {
     clearUnitPlan();
     setPreviewUrl(null);
     setNormalizedPlan(null);
+    setEditing(false);
     if (fileRef.current) fileRef.current.value = "";
   }, [clearUnitPlan]);
 
@@ -93,6 +108,20 @@ export function PlanImport() {
     );
   }
 
+  // Editing phase: show PlanEditor for adjustment before verification
+  if (editing && normalizedPlan) {
+    return (
+      <div className="plan-import">
+        <PlanEditor
+          plan={normalizedPlan}
+          onConfirm={handleEditorConfirm}
+          onReset={handleEditorReset}
+          onClear={handleClear}
+        />
+      </div>
+    );
+  }
+
   const isProcessing = planImportState.status === "uploading"
     || planImportState.status === "extracting"
     || planImportState.status === "normalizing";
@@ -101,6 +130,7 @@ export function PlanImport() {
     <div className="plan-import">
       {/* Upload zone */}
       <div
+        data-testid="plan-import-upload"
         className={`plan-import-upload ${dragover ? "plan-import-upload--dragover" : ""}`}
         onClick={() => !isProcessing && fileRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
@@ -112,17 +142,18 @@ export function PlanImport() {
         </span>
         <div className="plan-import-upload-text">
           <p className="font-mono" style={{ fontSize: 12 }}>
-            {isProcessing ? statusLabel(planImportState.status) : "TAP OR DROP FLOOR PLAN IMAGE"}
+            {isProcessing ? statusLabel(planImportState.status) : "TAP OR DROP FLOOR PLAN"}
           </p>
-          <p className="text-dim" style={{ fontSize: 11 }}>PNG, JPEG, or WebP</p>
+          <p className="text-dim" style={{ fontSize: 11 }}>PNG, JPEG, WebP, or PDF</p>
         </div>
       </div>
       <input
         ref={fileRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept={ACCEPTED_EXTENSIONS}
         style={{ display: "none" }}
         onChange={handleFileSelect}
+        data-testid="plan-import-file-input"
       />
 
       {/* Preview */}
@@ -151,16 +182,20 @@ export function PlanImport() {
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions: go to editor for review/adjustment before verification */}
       {normalizedPlan && planImportState.status === "ready" && (
         <div className="plan-import-actions">
           <button className="plan-import-btn" onClick={handleClear}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>restart_alt</span>
             Reset
           </button>
-          <button className="plan-import-btn plan-import-btn--primary" onClick={handleConfirm}>
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
-            Verify & Use Plan
+          <button
+            className="plan-import-btn plan-import-btn--primary"
+            onClick={() => setEditing(true)}
+            data-testid="review-adjust-plan"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit</span>
+            Review & Adjust
           </button>
         </div>
       )}
@@ -175,21 +210,4 @@ function statusLabel(status: string): string {
     case "normalizing": return "PROCESSING GEOMETRY...";
     default: return "PROCESSING...";
   }
-}
-
-export function SpatialBadge() {
-  const spatialMode = useBTOStore((s) => s.spatialMode);
-  const unitPlan = useBTOStore((s) => s.unitPlan);
-  const planDraft = useBTOStore((s) => s.planDraft);
-
-  if (unitPlan?.status === "verified") {
-    return <span className="plan-badge plan-badge--verified">Verified Plan</span>;
-  }
-  if (planDraft || unitPlan?.status === "draft") {
-    return <span className="plan-badge plan-badge--draft">Draft Plan</span>;
-  }
-  if (spatialMode === "fallback") {
-    return <span className="plan-badge plan-badge--fallback">Quick Layout</span>;
-  }
-  return null;
 }

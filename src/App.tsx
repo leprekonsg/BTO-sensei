@@ -13,6 +13,7 @@ import { UnitInfo } from "./components/bto/UnitInfo";
 import { ConfirmChopButton } from "./components/bto/ConfirmChopButton";
 import { ChopStamp } from "./components/bto/ChopStamp";
 import { ErrorBoundary } from "./components/bto/ErrorBoundary";
+import { PlacementOverlayHarness } from "./components/bto/PlacementOverlayHarness";
 import { useBTOAudio } from "./hooks/use-bto-audio";
 import { useBTOStore } from "./lib/store";
 import type { FailureMode } from "./lib/types";
@@ -77,6 +78,15 @@ function AppContent() {
   }
 
   const handleStampDone = useCallback(() => setShowStamp(false), []);
+
+  const harness =
+    import.meta.env.DEV && typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("harness")
+      : null;
+
+  if (harness === "placement-overlay") {
+    return <PlacementOverlayHarness />;
+  }
 
   return (
     <>
