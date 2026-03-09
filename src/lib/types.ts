@@ -208,6 +208,24 @@ export interface BTOStore {
   enqueueExplanation: (item: ExplanationQueueItem) => void;
   updateExplanation: (id: string, patch: Partial<ExplanationQueueItem>) => void;
   clearCompletedExplanations: () => void;
+
+  // ── Spatial Truth ──
+  spatialMode: SpatialMode;
+  setSpatialMode: (mode: SpatialMode) => void;
+  unitPlan: UnitPlan | null;
+  planDraft: FloorPlanDraft | null;
+  setPlanDraft: (draft: FloorPlanDraft | null) => void;
+  verifyUnitPlan: (plan: UnitPlan) => void;
+  clearUnitPlan: () => void;
+  defectPlacements: Record<string, DefectPlacement>;
+  upsertDefectPlacement: (placement: DefectPlacement) => void;
+  removeDefectPlacement: (defectId: string) => void;
+  selectedPlanRoomId: string | null;
+  setSelectedPlanRoomId: (roomId: string | null) => void;
+  planEditorState: PlanEditorState;
+  setPlanEditorState: (patch: Partial<PlanEditorState>) => void;
+  planImportState: PlanImportState;
+  setPlanImportState: (patch: Partial<PlanImportState>) => void;
 }
 
 export interface UseBTOAudioReturn {
@@ -268,3 +286,97 @@ export const ROOMS = [
 ] as const;
 
 export type RoomName = (typeof ROOMS)[number];
+
+// ── Spatial Truth types ──────────────────────────────────────────────
+
+export type Point2D = [number, number];
+export type Polygon = Point2D[];
+
+export type PlanStatus = "none" | "draft" | "verified";
+export type SpatialMode = "verified-plan" | "fallback";
+export type SurfaceType = "wall" | "floor" | "ceiling";
+export type PlacementMode = "room" | "wall" | "point" | "unplaced";
+
+export type PlanRoomKind =
+  | "bedroom"
+  | "bathroom"
+  | "kitchen"
+  | "living"
+  | "balcony"
+  | "corridor"
+  | "utility"
+  | "study"
+  | "entrance";
+
+export interface PlanRoom {
+  id: string;
+  label: string;
+  kind: PlanRoomKind;
+  polygon: Polygon;
+  centroid: Point2D;
+}
+
+export interface WallSegment {
+  id: string;
+  roomId: string;
+  start: Point2D;
+  end: Point2D;
+  length?: number;
+  surfaceType: SurfaceType;
+  adjacentRoomId?: string;
+}
+
+export interface UnitPlan {
+  id: string;
+  source: "upload" | "template" | "brochure";
+  status: PlanStatus;
+  version: number;
+  bounds: { width: number; height: number };
+  rooms: PlanRoom[];
+  walls: WallSegment[];
+  orientation?: number;
+  rawAssetRef?: string;
+}
+
+export interface FloorPlanDraft {
+  unitLabel?: string;
+  rooms: Array<{
+    label: string;
+    kind: PlanRoomKind;
+    polygon: Polygon;
+    confidence: number;
+  }>;
+  walls: Array<{
+    start: Point2D;
+    end: Point2D;
+    roomLabel?: string;
+    confidence: number;
+  }>;
+  orientationHint?: number;
+  overallConfidence: number;
+}
+
+export interface DefectPlacement {
+  defectId: string;
+  mode: PlacementMode;
+  roomId?: string;
+  surfaceType?: SurfaceType;
+  segmentId?: string;
+  localPos?: Point2D;
+  screenTap?: Point2D;
+  confidence?: number;
+  confirmedByUser: boolean;
+}
+
+export interface PlanImportState {
+  status: "idle" | "uploading" | "extracting" | "normalizing" | "ready" | "error";
+  error?: string;
+  rawImageUrl?: string;
+}
+
+export interface PlanEditorState {
+  selectedRoomId: string | null;
+  selectedSegmentId: string | null;
+  dragVertex: { roomId: string; vertexIndex: number } | null;
+  dirty: boolean;
+}

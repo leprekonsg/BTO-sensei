@@ -1,0 +1,144 @@
+.plan-editor {
+  position: relative;
+}
+
+.plan-editor-svg-wrap {
+  position: relative;
+  width: 100%;
+  background: #14191e;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: none;
+}
+
+.plan-editor-svg {
+  width: 100%;
+  display: block;
+}
+
+.plan-editor-room-poly {
+  cursor: pointer;
+  transition: fill 0.15s;
+}
+
+.plan-editor-room-poly:hover {
+  fill: rgba(0, 255, 136, 0.08);
+}
+
+.plan-editor-room-poly--selected {
+  fill: rgba(0, 255, 136, 0.12);
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+.plan-editor-vertex {
+  cursor: grab;
+  transition: r 0.1s;
+}
+
+.plan-editor-vertex:hover {
+  r: 7;
+}
+
+.plan-editor-vertex--dragging {
+  cursor: grabbing;
+}
+
+.plan-editor-wall {
+  cursor: pointer;
+}
+
+.plan-editor-wall:hover {
+  stroke: var(--primary);
+}
+
+.plan-editor-wall--selected {
+  stroke: var(--primary);
+  stroke-width: 3;
+}
+
+.plan-editor-label {
+  pointer-events: none;
+  user-select: none;
+}
+
+.plan-editor-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.plan-editor-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(31, 38, 45, 0.8);
+  color: var(--text-primary, #f4f1ea);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.plan-editor-btn:hover {
+  background: rgba(31, 38, 45, 1);
+}
+
+.plan-editor-btn--primary {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+}
+
+.plan-editor-btn--danger {
+  color: var(--severity-critical, #ef4444);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.plan-editor-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.plan-editor-room-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(31, 38, 45, 0.6);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.plan-editor-room-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+.plan-editor-room-panel input {
+  flex: 1;
+  padding: 6px 8px;
+  background: rgba(20, 25, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text-primary, #f4f1ea);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.plan-editor-room-panel select {
+  padding: 6px 8px;
+  background: rgba(20, 25, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text-primary, #f4f1ea);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}

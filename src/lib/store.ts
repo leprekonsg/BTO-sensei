@@ -7,11 +7,17 @@ import type {
   AsyncState,
   BlueprintCoord,
   BTOStore,
+  DefectPlacement,
   ExplanationQueueItem,
   FailureMode,
+  FloorPlanDraft,
   FlatType,
   InspectionReport,
+  PlanEditorState,
+  PlanImportState,
+  SpatialMode,
   TapResult,
+  UnitPlan,
 } from "./types";
 
 const memoryStore = new Map<string, string>();
@@ -55,6 +61,21 @@ function emptyAsyncState<T>(): AsyncState<T> {
 
 type PersistedState = Pick<BTOStore, "currentRoom" | "audioMode" | "defects" | "flatType"> & {
   reportData: InspectionReport | null;
+  // v2 spatial fields
+  spatialMode?: SpatialMode;
+  unitPlan?: UnitPlan | null;
+  defectPlacements?: Record<string, DefectPlacement>;
+};
+
+const DEFAULT_PLAN_EDITOR_STATE: PlanEditorState = {
+  selectedRoomId: null,
+  selectedSegmentId: null,
+  dragVertex: null,
+  dirty: false,
+};
+
+const DEFAULT_PLAN_IMPORT_STATE: PlanImportState = {
+  status: "idle",
 };
 
 function buildReportState(data: InspectionReport | null): AsyncState<InspectionReport> {
@@ -234,10 +255,65 @@ export const useBTOStore = create<BTOStore>()(
             (entry) => entry.status !== "completed" && entry.status !== "failed",
           ),
         })),
+
+      // ── Spatial Truth state & actions ──
+      spatialMode: "fallback" as SpatialMode,
+      setSpatialMode: (mode: SpatialMode) => set({ spatialMode: mode }),
+
+      unitPlan: null as UnitPlan | null,
+      planDraft: null as FloorPlanDraft | null,
+      setPlanDraft: (draft: FloorPlanDraft | null) => set({ planDraft: draft }),
+
+      verifyUnitPlan: (plan: UnitPlan) =>
+        set({
+          unitPlan: { ...plan, status: "verified" },
+          planDraft: null,
+          spatialMode: "verified-plan",
+        }),
+
+      clearUnitPlan: () =>
+        set({
+          unitPlan: null,
+          planDraft: null,
+          spatialMode: "fallback",
+          selectedPlanRoomId: null,
+          planEditorState: DEFAULT_PLAN_EDITOR_STATE,
+          planImportState: DEFAULT_PLAN_IMPORT_STATE,
+        }),
+
+      defectPlacements: {} as Record<string, DefectPlacement>,
+      upsertDefectPlacement: (placement: DefectPlacement) =>
+        set((state) => ({
+          defectPlacements: {
+            ...state.defectPlacements,
+            [placement.defectId]: placement,
+          },
+        })),
+      removeDefectPlacement: (defectId: string) =>
+        set((state) => {
+          const next = { ...state.defectPlacements };
+          delete next[defectId];
+          return { defectPlacements: next };
+        }),
+
+      selectedPlanRoomId: null as string | null,
+      setSelectedPlanRoomId: (roomId: string | null) => set({ selectedPlanRoomId: roomId }),
+
+      planEditorState: DEFAULT_PLAN_EDITOR_STATE,
+      setPlanEditorState: (patch: Partial<PlanEditorState>) =>
+        set((state) => ({
+          planEditorState: { ...state.planEditorState, ...patch },
+        })),
+
+      planImportState: DEFAULT_PLAN_IMPORT_STATE as PlanImportState,
+      setPlanImportState: (patch: Partial<PlanImportState>) =>
+        set((state) => ({
+          planImportState: { ...state.planImportState, ...patch },
+        })),
     }),
     {
       name: "bto-store",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => getStorage()),
       partialize: (state): PersistedState => ({
         currentRoom: state.currentRoom,
@@ -245,15 +321,45 @@ export const useBTOStore = create<BTOStore>()(
         audioMode: state.audioMode,
         defects: state.defects,
         reportData: state.report.data,
+        spatialMode: state.spatialMode,
+        // Strip rawAssetRef to avoid bloating sessionStorage
+        unitPlan: state.unitPlan
+          ? { ...state.unitPlan, rawAssetRef: undefined }
+          : null,
+        defectPlacements: state.defectPlacements,
       }),
       merge: (persisted, current) => {
         const persistedState = persisted as PersistedState | undefined;
+        const effectiveSpatialMode: SpatialMode =
+          persistedState?.unitPlan?.status === "verified"
+            ? (persistedState.spatialMode ?? "verified-plan")
+            : "fallback";
         return {
           ...current,
           ...(persistedState ?? {}),
           report: buildReportState(persistedState?.reportData ?? null),
           blueprintCoords: buildBlueprintState(persistedState?.defects ?? [], persistedState?.flatType ?? "4-room"),
+          spatialMode: effectiveSpatialMode,
+          unitPlan: persistedState?.unitPlan ?? null,
+          defectPlacements: persistedState?.defectPlacements ?? {},
+          planDraft: null,
+          selectedPlanRoomId: null,
+          planEditorState: DEFAULT_PLAN_EDITOR_STATE,
+          planImportState: DEFAULT_PLAN_IMPORT_STATE,
         };
+      },
+      migrate: (persisted, version) => {
+        const state = persisted as PersistedState;
+        if (version < 2) {
+          // v1 -> v2: add spatial fields with safe defaults
+          return {
+            ...state,
+            spatialMode: "fallback" as SpatialMode,
+            unitPlan: null,
+            defectPlacements: {},
+          };
+        }
+        return state;
       },
     },
   ),

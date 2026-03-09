@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTO-Sensei Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #F8F6F0;
+      --paper-color: #FFFFFF;
+      --text-main: #2A241F;
+      --text-muted: #6B655F;
+      --line-color: #E2DCCC;
+
+      --accent-blue: #4A6274;
+      --accent-orange: #B85C38;
+      --accent-purple: #7B6A8E;
+      --accent-green: #5C7C60;
+      --accent-gray: #8F8C85;
+
+      --layer-beige: #F4EBE0;
+      --layer-blue: #EEF4FA;
+      --layer-orange: #FEF3E6;
+      --layer-purple: #F5EEFF;
+      --layer-green: #EEFAF1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Jost', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      background-image:
+        linear-gradient(var(--line-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line-color) 1px, transparent 1px);
+      background-size: 32px 32px;
+      margin: 0;
+      padding: 60px 20px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    .page-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.97);
+      padding: 80px;
+      border: 1px solid var(--line-color);
+      box-shadow: 0 24px 48px rgba(42, 36, 31, 0.04);
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 20px 10px;
+      }
+
+      .page-container {
+        padding: 40px 24px;
+      }
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 5rem;
+      border-bottom: 1px solid var(--text-main);
+      padding-bottom: 3rem;
+    }
+
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 600;
+      font-size: 3.5rem;
+      margin: 0 0 12px 0;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      font-family: 'Jost', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 600;
+      font-size: 2.2rem;
+      margin-top: 0;
+      margin-bottom: 2rem;
+      color: var(--text-main);
+      display: inline-block;
+      border-bottom: 1px dashed var(--accent-gray);
+      padding-bottom: 4px;
+    }
+
+    .section {
+      margin-bottom: 5rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      padding: 32px;
+      background: var(--paper-color);
+      border: 1px solid var(--line-color);
+      border-radius: 0;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease;
+      position: relative;
+    }
+
+    .card:hover {
+      transform: translateY(-8px) scale(1.01);
+      box-shadow: 0 16px 32px rgba(42, 36, 31, 0.06);
+      z-index: 2;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 4px;
+      width: 100%;
+    }
+
+    .card.blue::before {
+      background-color: var(--accent-blue);
+    }
+
+    .card.orange::before {
+      background-color: var(--accent-orange);
+    }
+
+    .card.purple::before {
+      background-color: var(--accent-purple);
+    }
+
+    .card.green::before {
+      background-color: var(--accent-green);
+    }
+
+    .card.gray::before {
+      background-color: var(--accent-gray);
+    }
+
+    .card h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      color: var(--text-main);
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 3rem auto;
+      overflow: visible;
+    }
+
+    .svg-text-title {
+      font-family: 'Jost', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      fill: #FFFFFF;
+    }
+
+    .svg-text-sub {
+      font-family: 'Jost', sans-serif;
+      font-weight: 400;
+      font-size: 11px;
+      fill: rgba(255, 255, 255, 0.85);
+    }
+
+    code {
+      background: #EBE8E0;
+      padding: 3px 6px;
+      color: var(--text-main);
+      border-radius: 2px;
+      font-size: 0.85em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    ul {
+      padding-left: 20px;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Animations */
+    .stagger-1,
+    .stagger-2,
+    .stagger-3,
+    .stagger-4,
+    .stagger-5,
+    .stagger-6 {
+      opacity: 0;
+    }
+
+    .stagger-1 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.1s;
+    }
+
+    .stagger-2 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.25s;
+    }
+
+    .stagger-3 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.4s;
+    }
+
+    .stagger-4 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.55s;
+    }
+
+    .stagger-5 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.7s;
+    }
+
+    .stagger-6 {
+      animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation-delay: 0.85s;
+    }
+
+    @keyframes slideUp {
+      0% {
+        opacity: 0;
+        transform: translateY(40px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Architecture Layers styles */
+    .arch-diagram-wrapper {
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+
+    .arch-diagram-container {
+      border: 1px dashed var(--line-color);
+      padding: 40px;
+      width: 100%;
+      position: relative;
+    }
+
+    .arch-diagram-inner {
+      border: 1px solid var(--line-color);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--bg-color);
+    }
+
+    .arch-block {
+      width: 100%;
+      padding: 24px;
+      position: relative;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+    }
+
+    .arch-block:hover {
+      transform: scale(1.02);
+      z-index: 10;
+      box-shadow: 0 16px 32px rgba(42, 36, 31, 0.08);
+    }
+
+    .arch-block h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin: 0 0 8px 0;
+    }
+
+    .arch-block p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .arch-block.beige {
+      background-color: var(--layer-beige);
+      border: 1px solid #D8CAB6;
+    }
+
+    .arch-block.blue {
+      background-color: var(--layer-blue);
+      border: 1px solid #C4D6E8;
+    }
+
+    .arch-block.orange {
+      background-color: var(--layer-orange);
+      border: 1px solid #E6D0BA;
+    }
+
+    .arch-block.purple {
+      background-color: var(--layer-purple);
+      border: 1px solid #D6BFFF;
+    }
+
+    .arch-block.green {
+      background-color: var(--layer-green);
+      border: 1px solid #BFEBC9;
+    }
+
+    .arch-connector {
+      width: 1px;
+      height: 32px;
+      background-color: var(--accent-gray);
+      margin: 0 auto;
+    }
+
+    .arch-row-split {
+      display: flex;
+      width: 100%;
+      gap: 24px;
+    }
+
+    .arch-row-split>.arch-block {
+      flex: 1;
+    }
+
+    .arch-tree-wrapper {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .arch-tree-horizontal-line {
+      width: calc(50% + 12px);
+      height: 1px;
+      background-color: var(--accent-gray);
+    }
+
+    .arch-tree-vertical-drop {
+      display: flex;
+      width: 100%;
+      justify-content: space-around;
+    }
+
+    .arch-tree-vertical-drop>div {
+      width: 1px;
+      height: 16px;
+      background-color: var(--accent-gray);
+    }
+
+    @media (max-width: 600px) {
+      .arch-row-split {
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .arch-tree-horizontal-line {
+        display: none;
+      }
+
+      .arch-tree-vertical-drop {
+        flex-direction: column;
+        gap: 0;
+        align-items: center;
+      }
+
+      .arch-tree-vertical-drop>div {
+        height: 32px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="page-container stagger-1">
+    <header>
+      <h1>BTO-Sensei</h1>
+      <div class="subtitle">Comprehensive Architecture Overview</div>
+    </header>
+
+    <div class="section stagger-2">
+      <h2>1. Business Context</h2>
+      <div class="grid">
+        <div class="card blue">
+          <h3>Business Objectives</h3>
+          <p>Assist new homeowners and inspectors in conducting thorough Singapore HDB BTO handover checks. Automate
+            logging, verify defect evidence computationally, and produce CONQUAS 2022-ready reports.</p>
+        </div>
+        <div class="card purple">
+          <h3>Users</h3>
+          <p>New HDB homeowners conducting key collection checks, alongside professional defect inspectors and
+            contractors.</p>
+        </div>
+        <div class="card orange">
+          <h3>Value Proposition</h3>
+          <p>A fast, fully client-side inspection assistant combining Gemini-powered vision, live audio workflows, and
+            HUD review mapped rigorously to CONQUAS rules.</p>
+        </div>
+        <div class="card green">
+          <h3>Metrics for Success</h3>
+          <p>Correct defect classification, precise app-side measurement checks mapping to pass/fail states, robust
+            offline fallback capabilities, and processing speed on client devices.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section stagger-3">
+      <h2>2. Data Flow Architecture</h2>
+      <svg viewBox="0 0 800 400">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8F8C85" />
+          </marker>
+          <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4A6274" />
+          </marker>
+        </defs>
+
+        <!-- Data sources -->
+        <g transform="translate(40, 60)">
+          <rect width="140" height="60" rx="2" fill="#4A6274" />
+          <text x="70" y="35" text-anchor="middle" class="svg-text-title">Camera Feed</text>
+
+          <rect y="100" width="140" height="60" rx="2" fill="#4A6274" />
+          <text x="70" y="135" text-anchor="middle" class="svg-text-title">Audio Stream</text>
+
+          <rect y="200" width="140" height="60" rx="2" fill="#4A6274" />
+          <text x="70" y="235" text-anchor="middle" class="svg-text-title">User Inputs</text>
+        </g>
+
+        <!-- Processing center -->
+        <g transform="translate(300, 40)">
+          <rect width="200" height="280" rx="4" fill="rgba(184, 92, 56, 0.05)" stroke="#B85C38" stroke-width="1.5"
+            stroke-dasharray="4,4" />
+          <text x="100" y="30" fill="#B85C38" text-anchor="middle" class="svg-text-title">Client-Side Processing</text>
+
+          <rect x="20" y="50" width="160" height="50" rx="2" fill="#7B6A8E" />
+          <text x="100" y="80" text-anchor="middle" class="svg-text-title">Gemini Vision/Live</text>
+
+          <rect x="20" y="120" width="160" height="50" rx="2" fill="#B85C38" />
+          <text x="100" y="150" text-anchor="middle" class="svg-text-title">HUD Tracking</text>
+
+          <rect x="20" y="190" width="160" height="50" rx="2" fill="#B85C38" />
+          <text x="100" y="220" text-anchor="middle" class="svg-text-title">CONQUAS Logic</text>
+        </g>
+
+        <!-- Outputs -->
+        <g transform="translate(620, 100)">
+          <rect width="140" height="60" rx="2" fill="#5C7C60" />
+          <text x="70" y="35" text-anchor="middle" class="svg-text-title">Defect Logs</text>
+
+          <rect y="100" width="140" height="60" rx="2" fill="#5C7C60" />
+          <text x="70" y="135" text-anchor="middle" class="svg-text-title">PDF Export</text>
+        </g>
+
+        <!-- Connections -->
+        <path d="M 180 90 L 300 110" stroke="#4A6274" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)" />
+        <path d="M 180 160 L 300 130" stroke="#4A6274" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)" />
+        <path d="M 180 260 L 300 240" stroke="#4A6274" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)" />
+
+        <path d="M 500 130 L 620 130" stroke="#8F8C85" stroke-width="1.5" fill="none" marker-end="url(#arrow)" />
+        <path d="M 500 190 L 620 190" stroke="#8F8C85" stroke-width="1.5" fill="none" marker-end="url(#arrow)" />
+      </svg>
+    </div>
+
+    <div class="section stagger-4">
+      <h2>3. Processing Pipeline</h2>
+      <svg viewBox="0 0 900 180">
+        <defs>
+          <marker id="pipe-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#E2DCCC" />
+          </marker>
+        </defs>
+
+        <g transform="translate(20, 50)">
+          <rect width="130" height="60" rx="2" fill="#4A6274" />
+          <text x="65" y="35" text-anchor="middle" class="svg-text-title">Data Capture</text>
+          <path d="M 130 30 L 160 30" stroke="#E2DCCC" stroke-width="2" marker-end="url(#pipe-arrow)" />
+
+          <rect x="170" y="0" width="150" height="60" rx="2" fill="#7B6A8E" />
+          <text x="245" y="25" text-anchor="middle" class="svg-text-title">Fast Vision Pass</text>
+          <text x="245" y="45" text-anchor="middle" class="svg-text-sub">Gemini Image Class.</text>
+          <path d="M 320 30 L 350 30" stroke="#E2DCCC" stroke-width="2" marker-end="url(#pipe-arrow)" />
+
+          <rect x="360" y="0" width="150" height="60" rx="2" fill="#7B6A8E" />
+          <text x="435" y="25" text-anchor="middle" class="svg-text-title">Agentic Pass</text>
+          <text x="435" y="45" text-anchor="middle" class="svg-text-sub">Code Execution</text>
+          <path d="M 510 30 L 540 30" stroke="#E2DCCC" stroke-width="2" marker-end="url(#pipe-arrow)" />
+
+          <rect x="550" y="0" width="140" height="60" rx="2" fill="#B85C38" />
+          <text x="620" y="25" text-anchor="middle" class="svg-text-title">CONQUAS Engine</text>
+          <text x="620" y="45" text-anchor="middle" class="svg-text-sub">Pass/Fail Filter</text>
+          <path d="M 690 30 L 720 30" stroke="#E2DCCC" stroke-width="2" marker-end="url(#pipe-arrow)" />
+
+          <rect x="730" y="0" width="130" height="60" rx="2" fill="#5C7C60" />
+          <text x="795" y="35" text-anchor="middle" class="svg-text-title">Yield Output</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="section stagger-5">
+      <h2>4. System Architecture Layers</h2>
+      <div class="arch-diagram-wrapper">
+        <div class="arch-diagram-container">
+          <div class="arch-diagram-inner">
+
+            <div class="arch-block beige">
+              <h3>1. UI / Interaction</h3>
+              <p>Layout, RoomNavigator, AudioCapture, CameraCapture, HeadsUpView, DefectLogSidebar, ReportDashboard,
+                ApiKeyConfig, ChopStamp</p>
+            </div>
+
+            <div class="arch-connector"></div>
+
+            <div class="arch-block blue">
+              <h3>2. Workflow Hooks</h3>
+              <p>useCamera for capture and vision analysis; useBTOAudio for DSP and mic/sample handling<br>
+                useHudDetector for canvas or YOLO auto-detection; useBTOConfig for Gemini Live session; useGeminiTools
+                for tool-call side effects</p>
+            </div>
+
+            <div class="arch-connector"></div>
+
+            <div class="arch-block orange">
+              <h3>3. Core Domain Services</h3>
+              <p>Zustand store, defect normalization, bbox clamps, severity validation, retry/backoff, offline
+                fallbacks, room geometry, PDF/report composition<br>
+                CONQUAS logic evaluates measured values for gap, lippage, verticality, surface evenness, and severity
+                rationale enrichment</p>
+            </div>
+
+            <div class="arch-tree-wrapper">
+              <div class="arch-connector" style="height: 16px;"></div>
+              <div class="arch-tree-horizontal-line"></div>
+              <div class="arch-tree-vertical-drop">
+                <div></div>
+                <div></div>
+              </div>
+            </div>
+
+            <div class="arch-row-split">
+              <div class="arch-block purple">
+                <h3>4A. External AI Services</h3>
+                <p>Gemini Vision fast pass, Gemini agentic verification with code execution, Gemini Live</p>
+              </div>
+              <div class="arch-block green">
+                <h3>4B. Browser / Device Platform</h3>
+                <p>MediaDevices camera and microphone, Canvas API, Web Audio / OfflineAudioContext, ses</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADDED NANO BANANA / FLOORPLAN INTEGRATION SECTION TO RETAIN CONTEXT IN COMPREHENSIVE DOC -->
+    <div class="section stagger-6">
+      <h2>5. Blueprint & Flow Modules</h2>
+      <div class="grid">
+        <div class="card purple">
+          <h3>HDB Floor Plan Logic</h3>
+          <p><strong>Functional:</strong> Defect logging anchors specifically mapped to exact architectural bounds for
+            3-Room, 4-Room, and 5-Room flat permutations. Enforces geographic context.</p>
+        </div>
+        <div class="card blue">
+          <h3>Nano Banana Edition</h3>
+          <p><strong>Functional:</strong> Isometric rendering style serving immersive blueprint visualization within the
+            client state context. Represents exact component/wall locations mapped via Zustand.</p>
+        </div>
+        <div class="card orange">
+          <h3>Future Extensibility (AR Ready)</h3>
+          <p><strong>System:</strong> Pipeline allows streaming video drops and WebRTC data streams for live augmented
+            reality bounding boxes overlaid natively on client architecture.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section stagger-6">
+      <h2>6. Constraints & Execution</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>CONQUAS Verification Engine</h3>
+          <p><strong>Functional:</strong> Employs structured mapping decoupling measurements from AI text outputs. If
+            the model measures a 3.5mm lippage, rigorous logic returns a failed grade per CONQUAS specs rather than
+            trusting LLM sentiment.</p>
+        </div>
+        <div class="card gray">
+          <h3>Static Target Architecture</h3>
+          <p><strong>Non-functional:</strong> 100% Client-side. No API routing or backend servers needed beyond standard
+            CDN distribution. Employs offline-capable fallbacks with ephemeral state ensuring zero persistent payloads.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

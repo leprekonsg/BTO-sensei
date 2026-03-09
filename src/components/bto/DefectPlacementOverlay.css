@@ -1,0 +1,78 @@
+.placement-overlay {
+  position: relative;
+}
+
+.placement-overlay-svg {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+  background: #14191e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.placement-room {
+  cursor: pointer;
+  transition: fill 0.15s;
+}
+
+.placement-room:hover {
+  fill: rgba(0, 255, 136, 0.06);
+}
+
+.placement-room--active {
+  fill: rgba(0, 255, 136, 0.1);
+}
+
+.placement-marker {
+  pointer-events: none;
+}
+
+.placement-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: rgba(31, 38, 45, 0.6);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+.placement-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.placement-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(31, 38, 45, 0.8);
+  color: var(--text-primary, #f4f1ea);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.placement-btn:hover {
+  background: rgba(31, 38, 45, 1);
+}
+
+.placement-btn--confirm {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+}
+
+.placement-btn--skip {
+  color: var(--text-dim, #888);
+}

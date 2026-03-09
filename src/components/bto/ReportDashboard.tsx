@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { useBTOStore } from "../../lib/store";
 import { generateCoverSummary, generateLocalCoverSummary } from "../../lib/gemini-report";
 import { FloorPlanSVG } from "./FloorPlanSVG";
+import { VerifiedPlanSVG } from "./VerifiedPlanSVG";
+import { SpatialBadge } from "./PlanImport";
+import { hasVerifiedPlan } from "../../lib/plan-helpers";
 import type { FlatType } from "../../lib/types";
 import "./ReportDashboard.css";
+
+const PlanImportLazy = lazy(() => import("./PlanImportLazy"));
 
 const FLAT_TYPES: FlatType[] = ["3-room", "4-room", "5-room"];
 
@@ -15,9 +20,15 @@ export function ReportDashboard() {
   const inspectorMessage = useBTOStore((s) => s.inspectorMessage);
   const flatType = useBTOStore((s) => s.flatType);
   const setFlatType = useBTOStore((s) => s.setFlatType);
+  const unitPlan = useBTOStore((s) => s.unitPlan);
+  const defectPlacements = useBTOStore((s) => s.defectPlacements);
+  const spatialMode = useBTOStore((s) => s.spatialMode);
   const [coverSummary, setCoverSummary] = useState<string | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(false);
+
+  const useVerifiedPlan = spatialMode === "verified-plan" && hasVerifiedPlan(unitPlan);
+  const [showPlanImport, setShowPlanImport] = useState(false);
 
   async function handleGenerateReport() {
     setCoverSummary(null);
@@ -88,6 +99,23 @@ export function ReportDashboard() {
         <div className="report-empty">
           <p>Log defects first, then generate a report.</p>
           <p className="font-mono text-dim">Defects logged: {defects.length}</p>
+
+          {/* Floor plan import entry */}
+          <button
+            className="report-generate-btn"
+            onClick={() => setShowPlanImport(!showPlanImport)}
+            style={{ marginBottom: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.15)" }}
+          >
+            <span className="material-symbols-outlined">add_photo_alternate</span>
+            {unitPlan?.status === "verified" ? "Floor Plan Added" : "Add Floor Plan"}
+            <SpatialBadge />
+          </button>
+          {showPlanImport && (
+            <Suspense fallback={<p className="font-mono text-dim">Loading...</p>}>
+              <PlanImportLazy />
+            </Suspense>
+          )}
+
           <button
             className="report-generate-btn"
             onClick={handleGenerateReport}
@@ -118,7 +146,7 @@ export function ReportDashboard() {
             <img src="/bto_sensei_logo_transparent.png" alt="BTO-Sensei" className="report-cover-logo-img" />
           </div>
           <h1 className="report-cover-title">BTO INSPECTION REPORT</h1>
-          <p className="report-cover-edition font-mono">NANO BANANA EDITION // {flatType.toUpperCase()} FLAT</p>
+          <p className="report-cover-edition font-mono">NANO BANANA EDITION // {flatType.toUpperCase()} FLAT <SpatialBadge /></p>
           <div className="report-cover-meta">
             <div className="report-cover-meta-item">
               <span className="font-mono text-dim">CASE ID</span>
@@ -218,6 +246,7 @@ export function ReportDashboard() {
           <h4 className="report-blueprint-title">
             <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>architecture</span>
             Nano Banana Blueprint: {data.flat_id}
+            <SpatialBadge />
           </h4>
           <div className="report-blueprint-controls">
             <button
@@ -226,13 +255,26 @@ export function ReportDashboard() {
             >
               {showAnnotations ? "LABELS ON" : "LABELS OFF"}
             </button>
-            <span className="font-mono text-dim" style={{ fontSize: 10 }}>SCALE 1:50</span>
+            <span className="font-mono text-dim" style={{ fontSize: 10 }}>
+              {useVerifiedPlan ? "VERIFIED" : "SCALE 1:50"}
+            </span>
           </div>
         </div>
         <div className="report-blueprint-container blueprint-grid">
-          <FloorPlanSVG coords={coords.data ?? []} flatType={flatType} showAnnotations={showAnnotations} />
+          {useVerifiedPlan && unitPlan ? (
+            <VerifiedPlanSVG
+              plan={unitPlan}
+              coords={coords.data ?? []}
+              placements={defectPlacements}
+              showAnnotations={showAnnotations}
+            />
+          ) : (
+            <FloorPlanSVG coords={coords.data ?? []} flatType={flatType} showAnnotations={showAnnotations} />
+          )}
           <div className="report-blueprint-status font-mono">
-            Live Sensor Data Feed: Connected // {flatType.toUpperCase()} Layout
+            {useVerifiedPlan
+              ? `Verified Plan // ${unitPlan!.rooms.length} Rooms`
+              : `Live Sensor Data Feed: Connected // ${flatType.toUpperCase()} Layout`}
           </div>
         </div>
       </div>

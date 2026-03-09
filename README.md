@@ -10,6 +10,14 @@ BTO-Sensei is a **mobile, AI-assisted construction quality inspection tool** des
 
 - **Core Use Cases:** Pre-handover residential inspections and internal developer/contractor QA/QC workflows.
 
+### Background: The Singapore BTO "Defects Check"
+
+For new flat owners in Singapore, the defects check is a time-boxed, high-cognitive-load workflow. Officially (via HDB's MyNiceHome), owners must inspect shortly after key collection, have 30 days to report defects before starting renovations, and are covered by a 1-year Defects Liability Period (DLP). This impacts renovation schedules and dictates if defects are attributed to original workmanship versus later renovations.
+
+Operationally, owners must physically label defects in-situ (e.g., painter's tape), maintain a written log, and raise a rectification request via the Building Service Centre (BSC). This requires an interactive, on-site tool rather than a back-office "upload photos later" app. 
+
+Furthermore, owners struggle to distinguish actual defects from normal imperfections and need a long-lived evidence trail for extended warranties (e.g., ceiling leaks, spalling concrete, waterproofing tampering). Therefore, the tool's value lies not just in spotting defects today, but in creating a defensible baseline and structured history.
+
 ## Current Status
 
 - React 19 + TypeScript + Vite app.
